@@ -7,9 +7,9 @@
   <meta name="description" content="Agenda semanal de reservación de salas audiovisuales de la División Industrial.">
   <title>Reservación de Salas Audiovisuales · División Industrial</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=4.1">
+  <link rel="stylesheet" href="styles.css?v=5.0">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script type="module" src="app.js?v=4.2"></script>
+  <script type="module" src="app.js?v=5.0"></script>
 </head>
 <body class="auth-pending">
   <section id="auth-screen" class="auth-screen" aria-live="polite">
@@ -59,10 +59,17 @@
       </div>
 
       <div class="calendar-toolbar">
-        <div>
+        <div class="calendar-period">
           <h2 id="period"></h2>
           <p id="summary"></p>
         </div>
+
+        <div id="quick-filters" class="quick-filters" role="group" aria-label="Filtros rápidos">
+          <button type="button" data-view="today">Hoy</button>
+          <button type="button" data-view="mine">Mis reservaciones</button>
+          <button type="button" data-view="week" aria-pressed="true">Esta semana</button>
+        </div>
+
         <div class="navigation">
           <button id="previous" aria-label="Semana anterior">←</button>
           <button id="today">Hoy</button>
@@ -74,7 +81,7 @@
       <div id="calendar" class="calendar"></div>
 
       <div class="calendar-footer">
-        <span>Haz clic o mantén presionado y arrastra para seleccionar el horario.</span>
+        <span id="availability-status" class="availability-status" aria-live="polite">Haz clic o arrastra para comprobar disponibilidad y reservar.</span>
         <span>Lunes a sábado · 07:00–22:00</span>
       </div>
     </section>
@@ -180,6 +187,7 @@
       <button id="delete-booking" class="danger">Eliminar</button>
       <button id="delete-series" class="danger" hidden>Eliminar serie</button>
       <button data-close>Cerrar</button>
+      <button id="duplicate-booking">Duplicar</button>
       <button id="edit-booking" class="primary">Editar</button>
     </div>
   </dialog>

@@ -1,26 +1,31 @@
-CORRECCIÓN V4.1 - INICIO DE SESIÓN
+VERSIÓN V5.0 · MEJORAS VISUALES
 
-PROBLEMA CORREGIDO:
-- El popup de Google se abre directamente desde el clic.
-- Firebase Auth se inicializa con browserLocalPersistence desde el inicio.
-- Se eliminó el await previo al popup que podía impedir que Chrome lo abriera.
-- Se agregaron versiones ?v=4.1 para evitar que GitHub Pages/Chrome usen JS viejo.
-- Si el navegador bloquea el popup, ahora la página muestra el motivo.
+ARCHIVOS A REEMPLAZAR EN GITHUB:
+- index.html
+- app.js
+- styles.css
 
-REEMPLAZAR EN GITHUB:
-1. index.html
-2. app.js
-3. storage.js
-4. styles.css
-5. firebase.js
+NO CAMBIAR:
+- firebase.js
+- storage.js
+- core.js
+- firestore.rules
 
-FIREBASE:
-- firestore.rules NO cambia respecto a la versión de colores.
-- Si ya publicaste esas reglas, no necesitas volver a cambiarlas.
-- Si no, publica firestore.rules.
+MEJORAS:
+- Altura de cada bloque de 30 min: 48 px.
+- Encabezados de días fijos al hacer scroll.
+- Columna de horas fija al desplazarse horizontalmente.
+- Línea roja de hora actual.
+- Color de Iván: amarillo suave y armónico.
+- Colores de usuarios diferenciados.
+- Tarjetas más compactas: hora, maestro, grupo + actividad.
+- Botón Duplicar reservación.
+- Filtros rápidos: Hoy, Mis reservaciones, Esta semana.
+- Indicador Disponible/Ocupado durante selección.
+- Día actual resaltado suavemente.
+- Sábados con fondo gris muy tenue.
+- En móvil se muestra un solo día con las salas lado a lado.
 
-DESPUÉS:
-- Esperar 1-2 minutos tras los commits.
-- Abrir la página.
-- Ctrl+F5 una vez.
-- Pulsar "Iniciar sesión con Google".
+Después del commit:
+- Esperar 1 minuto.
+- Abrir la página y hacer Ctrl+F5 una vez.

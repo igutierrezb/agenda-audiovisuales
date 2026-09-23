@@ -3,7 +3,7 @@ import { repository } from './storage.js?v=4.1';
 import { authService, OWNER_EMAIL } from './firebase.js?v=4.1';
 
 // Densidad visual del calendario: cada bloque representa 30 minutos.
-const SLOT_HEIGHT = 82;
+const SLOT_HEIGHT = 48;
 const HOUR_HEIGHT = SLOT_HEIGHT * 2;
 
 const $ = selector => document.querySelector(selector);
@@ -24,11 +24,11 @@ const fullDate = date => date.toLocaleDateString('es-MX', {
 
 const USER_PALETTES = {
   'ivan.gutierrez@uteq.edu.mx': {
-    bg: '#f4d9d5',
-    hover: '#edc5bf',
-    border: '#c87369',
-    accent: '#b65f55',
-    ink: '#6d3731'
+    bg: '#fff2b8',
+    hover: '#ffe894',
+    border: '#d5aa33',
+    accent: '#b88716',
+    ink: '#624b0c'
   },
   'monica.arellano@uteq.edu.mx': {
     bg: '#d7eee9',
@@ -52,11 +52,11 @@ const USER_PALETTES = {
     ink: '#563e72'
   },
   'karina.garcia@uteq.edu.mx': {
-    bg: '#f4e5c2',
-    hover: '#eed79f',
-    border: '#c3933f',
-    accent: '#a97928',
-    ink: '#6b511f'
+    bg: '#f3dce6',
+    hover: '#ebc8d7',
+    border: '#bd7895',
+    accent: '#a65778',
+    ink: '#6b3850'
   }
 };
 
@@ -158,6 +158,7 @@ let noticeTimer;
 let currentUser = null;
 let unsubscribeRealtime = null;
 let dragState = null;
+let quickView = 'week';
 
 function notice(message) {
   $('#notice').textContent = message;
@@ -184,6 +185,46 @@ function dates() {
   return Array.from({ length: 6 }, (_, i) => addDays(week, i));
 }
 
+function bookingConflict(roomId, date, start, end, excludeId = '') {
+  const startMinutes = minutes(start);
+  const endMinutes = minutes(end);
+
+  return state.bookings.find(booking =>
+    booking.id !== excludeId &&
+    booking.roomId === roomId &&
+    booking.date === date &&
+    startMinutes < minutes(booking.end) &&
+    endMinutes > minutes(booking.start)
+  );
+}
+
+function updateAvailabilityStatus(roomId, date, start, end) {
+  const status = $('#availability-status');
+  const calendar = $('#calendar');
+  if (!status || !roomId || !date || !start || !end) return null;
+
+  const conflict = bookingConflict(roomId, date, start, end);
+
+  calendar.classList.toggle('selection-busy', Boolean(conflict));
+  calendar.classList.toggle('selection-free', !conflict);
+
+  if (conflict) {
+    status.className = 'availability-status busy';
+    status.textContent = `Ocupado: ${conflict.teacher} · ${conflict.start}–${conflict.end}`;
+  } else {
+    status.className = 'availability-status available';
+    status.textContent = `Disponible · ${roomShort(roomId)} · ${start}–${end}`;
+  }
+
+  return conflict;
+}
+
+function updateQuickFilterButtons() {
+  for (const button of $$('#quick-filters [data-view]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.view === quickView));
+  }
+}
+
 function render() {
   if (selectedRoom !== 'all' && !state.rooms.some(r => r.id === selectedRoom)) {
     selectedRoom = 'all';
@@ -196,20 +237,44 @@ function render() {
     ...state.rooms.map(r => `<button data-room="${escape(r.id)}" aria-pressed="${selectedRoom === r.id}">${escape(r.name)}</button>`)
   ].join('');
 
+  updateQuickFilterButtons();
+
   const days = dates();
   const last = days[5];
+  const now = new Date();
+  const todayKey = dateKey(now);
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentDayIndex = Math.min((now.getDay() + 6) % 7, 5);
 
   $('#period').textContent = week.getMonth() === last.getMonth()
     ? `${week.getDate()}–${last.getDate()} de ${last.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}`
     : `${week.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })} – ${last.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
-  const visibleBookings = state.bookings.filter(b =>
+  let visibleBookings = state.bookings.filter(b =>
     b.date >= dateKey(week) &&
     b.date <= dateKey(last) &&
     (selectedRoom === 'all' || b.roomId === selectedRoom)
   );
 
-  $('#summary').textContent = `${visibleBookings.length} ${visibleBookings.length === 1 ? 'reservación' : 'reservaciones'} esta semana`;
+  if (quickView === 'mine') {
+    const email = String(currentUser?.email || '').toLowerCase();
+    visibleBookings = visibleBookings.filter(b =>
+      String(b.createdByEmail || '').toLowerCase() === email
+    );
+  }
+
+  if (quickView === 'today') {
+    visibleBookings = visibleBookings.filter(b => b.date === todayKey);
+  }
+
+  const summaryLabel = quickView === 'today'
+    ? 'hoy'
+    : quickView === 'mine'
+      ? 'tuyas esta semana'
+      : 'esta semana';
+
+  $('#summary').textContent =
+    `${visibleBookings.length} ${visibleBookings.length === 1 ? 'reservación' : 'reservaciones'} ${summaryLabel}`;
 
   $('#day-picker').innerHTML = days.map((d, i) => `
     <button data-day="${i}" aria-pressed="${selectedDay === i}" aria-label="${escape(fullDate(d))}">
@@ -221,6 +286,7 @@ function render() {
   const calendar = $('#calendar');
   const scrollTop = calendar.scrollTop;
   calendar.classList.toggle('all-rooms', selectedRoom === 'all');
+  calendar.classList.toggle('single-day', quickView === 'today');
 
   if (!state.rooms.length) {
     calendar.innerHTML = '<div class="empty">Agrega una sala para comenzar a reservar.</div>';
@@ -241,17 +307,22 @@ function render() {
     <div class="week" style="--room-count:${rooms.length};--day-mobile-width:${mobileWidth}px">
       <div class="time-head">HORA</div>
 
-      ${days.map((d, i) => `
-        <div class="day-head ${i === selectedDay ? 'selected' : ''} ${dateKey(d) === dateKey(new Date()) ? 'current' : ''}" style="--room-count:${rooms.length}">
-          <div class="day-title">
-            ${escape(d.toLocaleDateString('es-MX', { weekday: 'short' }))}
-            <strong>${d.getDate()}</strong>
+      ${days.map((d, i) => {
+        const key = dateKey(d);
+        const current = key === todayKey;
+        const saturday = d.getDay() === 6;
+        return `
+          <div class="day-head ${i === selectedDay ? 'selected' : ''} ${current ? 'current' : ''} ${saturday ? 'saturday' : ''}" style="--room-count:${rooms.length}">
+            <div class="day-title">
+              ${escape(d.toLocaleDateString('es-MX', { weekday: 'short' }))}
+              <strong>${d.getDate()}</strong>
+            </div>
+            <div class="room-heads" aria-label="Salas para ${escape(fullDate(d))}">
+              ${roomHeaders}
+            </div>
           </div>
-          <div class="room-heads" aria-label="Salas para ${escape(fullDate(d))}">
-            ${roomHeaders}
-          </div>
-        </div>
-      `).join('')}
+        `;
+      }).join('')}
 
       <div class="time-axis">
         ${Array.from({ length: 16 }, (_, i) => `
@@ -259,47 +330,65 @@ function render() {
         `).join('')}
       </div>
 
-      ${days.map((d, i) => `
-        <div class="day-column ${i === selectedDay ? 'selected' : ''}">
-          ${rooms.map(r => `
-            <div class="lane" aria-label="${escape(r.name)} · ${escape(fullDate(d))}">
-              ${Array.from({ length: 30 }, (_, n) => `
-                <button
-                  class="slot"
-                  data-date="${dateKey(d)}"
-                  data-room="${escape(r.id)}"
-                  data-start="${timeLabel(420 + n * 30)}"
-                  aria-label="Reservar ${escape(r.name)}, ${escape(fullDate(d))}, ${timeLabel(420 + n * 30)}">
-                </button>
-              `).join('')}
+      ${days.map((d, i) => {
+        const key = dateKey(d);
+        const isToday = key === todayKey;
+        const isSaturday = d.getDay() === 6;
+        const nowLineVisible = isToday && currentMinutes >= 420 && currentMinutes <= 1320;
+        const nowLineTop = ((currentMinutes - 420) / 30) * SLOT_HEIGHT;
 
-              ${visibleBookings
-                .filter(b => b.date === dateKey(d) && b.roomId === r.id)
-                .map(b => `
+        return `
+          <div class="day-column ${i === selectedDay ? 'selected' : ''} ${isToday ? 'current-day' : ''} ${isSaturday ? 'saturday' : ''}">
+            ${rooms.map(r => `
+              <div class="lane" aria-label="${escape(r.name)} · ${escape(fullDate(d))}">
+                ${Array.from({ length: 30 }, (_, n) => `
                   <button
-                    class="booking"
-                    style="top:${(minutes(b.start) - 420) / 30 * SLOT_HEIGHT + 2}px;height:${Math.max((minutes(b.end) - minutes(b.start)) / 30 * SLOT_HEIGHT - 4, 28)}px;${bookingColorStyle(b)}"
-                    data-booking="${escape(b.id)}"
-                    aria-label="${escape(`${b.teacher}, ${b.group}, ${b.activity}, ${b.start} a ${b.end}, ${r.name}`)}"
-                    title="${escape(`${r.name}\n${b.teacher} · ${b.group}\n${b.activity}\n${b.start}–${b.end}`)}">
-                    <span class="time">${escape(b.start)}–${escape(b.end)}</span>
-                    <strong>${escape(b.teacher)}</strong>
-                    <span>${escape(b.group)}</span>
-                    <span class="activity">${escape(b.activity)}</span>
-                    ${selectedRoom === 'all' && minutes(b.end) - minutes(b.start) > 30
-                      ? `<small>${escape(defaultRoomShort(r))}</small>`
-                      : ''}
-                    ${bookingAuditHtml(b)}
+                    class="slot"
+                    data-date="${key}"
+                    data-room="${escape(r.id)}"
+                    data-start="${timeLabel(420 + n * 30)}"
+                    aria-label="Reservar ${escape(r.name)}, ${escape(fullDate(d))}, ${timeLabel(420 + n * 30)}">
                   </button>
                 `).join('')}
-            </div>
-          `).join('')}
-        </div>
-      `).join('')}
+
+                ${visibleBookings
+                  .filter(b => b.date === key && b.roomId === r.id)
+                  .map(b => {
+                    const duration = minutes(b.end) - minutes(b.start);
+                    const audit = duration >= 60 ? bookingAuditHtml(b) : '';
+                    return `
+                      <button
+                        class="booking ${duration <= 30 ? 'compact-booking' : ''}"
+                        style="top:${(minutes(b.start) - 420) / 30 * SLOT_HEIGHT + 2}px;height:${Math.max(duration / 30 * SLOT_HEIGHT - 4, 24)}px;${bookingColorStyle(b)}"
+                        data-booking="${escape(b.id)}"
+                        aria-label="${escape(`${b.teacher}, ${b.group}, ${b.activity}, ${b.start} a ${b.end}, ${r.name}`)}"
+                        title="${escape(`${r.name}\n${b.teacher} · ${b.group}\n${b.activity}\n${b.start}–${b.end}\nCreó: ${bookingActor(b).createdLabel || '—'}\nEditó: ${bookingActor(b).updatedLabel || '—'}`)}">
+                        <span class="time">${escape(b.start)}–${escape(b.end)}</span>
+                        <strong>${escape(b.teacher)}</strong>
+                        <span class="booking-meta"><b>${escape(b.group)}</b>${b.activity ? ` · ${escape(b.activity)}` : ''}</span>
+                        ${audit}
+                      </button>
+                    `;
+                  }).join('')}
+              </div>
+            `).join('')}
+
+            ${nowLineVisible ? `
+              <div class="now-line" style="top:${nowLineTop}px" aria-hidden="true">
+                <span>${timeLabel(currentMinutes)}</span>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
 
   calendar.scrollTop = scrollTop;
+
+  if (quickView === 'today') {
+    selectedDay = currentDayIndex;
+  }
 }
 
 function changed(nextState, message) {
@@ -707,10 +796,26 @@ $('#room-tabs').onclick = event => {
   render();
 };
 
+$('#quick-filters').onclick = event => {
+  const button = event.target.closest('[data-view]');
+  if (!button) return;
+
+  quickView = button.dataset.view;
+
+  if (quickView === 'today' || quickView === 'week') {
+    const now = new Date();
+    week = monday(now);
+    selectedDay = Math.min((now.getDay() + 6) % 7, 5);
+  }
+
+  render();
+};
+
 $('#day-picker').onclick = event => {
   const button = event.target.closest('[data-day]');
   if (!button) return;
   selectedDay = Number(button.dataset.day);
+  quickView = 'week';
   render();
 };
 
@@ -721,7 +826,7 @@ $('#calendar').onclick = event => {
 
 function clearDragSelection() {
   document.querySelectorAll('.slot.drag-selected').forEach(slot => slot.classList.remove('drag-selected'));
-  $('#calendar').classList.remove('dragging');
+  $('#calendar').classList.remove('dragging', 'selection-free', 'selection-busy');
 }
 
 function paintDragSelection() {
@@ -749,6 +854,10 @@ $('#calendar').addEventListener('pointerdown', event => {
   };
   slot.setPointerCapture?.(event.pointerId);
   paintDragSelection();
+
+  const start = timeLabel(420 + index * 30);
+  const end = timeLabel(Math.min(420 + index * 30 + 60, 1320));
+  updateAvailabilityStatus(dragState.roomId, dragState.date, start, end);
 });
 
 $('#calendar').addEventListener('pointermove', event => {
@@ -760,6 +869,11 @@ $('#calendar').addEventListener('pointermove', event => {
   dragState.endIndex = index;
   dragState.moved = dragState.moved || index !== dragState.startIndex;
   paintDragSelection();
+
+  const [from, to] = [dragState.startIndex, dragState.endIndex].sort((a, b) => a - b);
+  const start = timeLabel(420 + from * 30);
+  const end = timeLabel(Math.min(420 + (to + 1) * 30, 1320));
+  updateAvailabilityStatus(dragState.roomId, dragState.date, start, end);
 });
 
 window.addEventListener('pointerup', event => {
@@ -770,8 +884,16 @@ window.addEventListener('pointerup', event => {
   const end = active.moved
     ? timeLabel(Math.min(420 + (to + 1) * 30, 1320))
     : timeLabel(Math.min(420 + from * 30 + 60, 1320));
+  const conflict = updateAvailabilityStatus(active.roomId, active.date, start, end);
+
   dragState = null;
   clearDragSelection();
+
+  if (conflict) {
+    notice(`Ese horario ya está ocupado por ${conflict.teacher} (${conflict.start}–${conflict.end}).`);
+    return;
+  }
+
   openBooking({ roomId: active.roomId, date: active.date, start, end });
 });
 
@@ -779,17 +901,20 @@ window.addEventListener('pointercancel', () => { dragState = null; clearDragSele
 
 $('#previous').onclick = () => {
   week = addDays(week, -7);
+  quickView = 'week';
   render();
 };
 
 $('#next').onclick = () => {
   week = addDays(week, 7);
+  quickView = 'week';
   render();
 };
 
 $('#today').onclick = () => {
   week = monday(new Date());
   selectedDay = Math.min((new Date().getDay() + 6) % 7, 5);
+  quickView = 'today';
   render();
 };
 
@@ -838,6 +963,25 @@ $('#booking-form').onsubmit = async event => {
   } finally {
     button.disabled = false;
   }
+};
+
+$('#duplicate-booking').onclick = () => {
+  if (!currentBooking) return;
+
+  const copy = {
+    id: '',
+    roomId: currentBooking.roomId,
+    date: currentBooking.date,
+    start: currentBooking.start,
+    end: currentBooking.end,
+    teacher: currentBooking.teacher,
+    group: currentBooking.group,
+    activity: currentBooking.activity
+  };
+
+  $('#detail-dialog').close();
+  openBooking(copy);
+  $('#booking-title').textContent = 'Duplicar reservación';
 };
 
 $('#edit-booking').onclick = () => {
@@ -1113,6 +1257,10 @@ $('#sign-in').onclick = async () => {
 
 $('#sign-out').onclick = () => authService.signOut();
 $('#auth-sign-out').onclick = () => authService.signOut();
+
+setInterval(() => {
+  if (currentUser && !dragState) render();
+}, 60000);
 
 $('#new').disabled = true;
 showAuth('Comprobando sesión…');
