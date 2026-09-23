@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123d42"><meta name="description" content="Agenda semanal de reservaciones de salas audiovisuales.">
+  <title>Salas audiovisuales · Agenda</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css"><script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">▦</span><span>ESPACIOS ACADÉMICOS<small>Salas audiovisuales</small></span></a><button id="manage" class="quiet">Administrar salas</button></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">AGENDA DE RESERVACIONES</p><h1>Un espacio para cada actividad.</h1><p class="subtitle">Consulta la disponibilidad y reserva tu sala.</p></div><button id="new" class="primary">＋ Nueva reservación</button></section>
+    <section class="workspace" aria-label="Calendario de salas">
+      <div class="room-bar"><div id="room-tabs" class="room-tabs" role="group" aria-label="Filtrar por sala"></div><span class="legend"><i></i>Disponible <i class="busy"></i>Ocupado</span></div>
+      <div class="calendar-toolbar"><div><h2 id="period"></h2><p id="summary"></p></div><div class="navigation"><button id="previous" aria-label="Semana anterior">←</button><button id="today">Hoy</button><button id="next" aria-label="Semana siguiente">→</button></div></div>
+      <div id="day-picker" class="day-picker" role="group" aria-label="Seleccionar día"></div>
+      <div id="calendar" class="calendar"></div>
+      <div class="calendar-footer"><span>Selecciona un horario libre para reservar.</span><span>Lunes a sábado · 07:00–22:00</span></div>
+    </section>
+    <footer class="page-footer"><span>Salas audiovisuales</span><span>Datos guardados en este navegador · Sin sincronización entre equipos</span></footer>
+    <p id="notice" role="status" aria-live="polite"></p>
+  </main>
+  <dialog id="booking-dialog" aria-labelledby="booking-title"><form id="booking-form"><div class="dialog-heading"><div><p class="eyebrow">RESERVACIÓN</p><h2 id="booking-title">Nueva reservación</h2></div><button type="button" class="close" data-close aria-label="Cerrar">×</button></div>
+    <input type="hidden" name="id"><label>Sala<select name="roomId" required></select></label><label>Fecha<input type="date" name="date" required></label>
+    <div class="form-row"><label>Hora inicial<select name="start" required></select></label><label>Hora final<select name="end" required></select></label></div>
+    <label>Nombre del maestro<input name="teacher" required autocomplete="name"></label><label>Grupo<input name="group" required placeholder="Ej. IDGS-43"></label><label>Actividad<textarea name="activity" required rows="2" placeholder="¿Qué actividad se realizará?"></textarea></label>
+    <p class="form-error" id="booking-error" role="alert"></p><div class="actions"><button type="button" data-close>Cancelar</button><button class="primary" type="submit">Guardar reservación</button></div></form></dialog>
+  <dialog id="detail-dialog" aria-labelledby="detail-title"><div class="dialog-heading"><div><p class="eyebrow">DETALLE DE RESERVACIÓN</p><h2 id="detail-title"></h2></div><button class="close" data-close aria-label="Cerrar">×</button></div><div id="details"></div><div class="actions"><button id="delete-booking" class="danger">Eliminar</button><button data-close>Cerrar</button><button id="edit-booking" class="primary">Editar</button></div></dialog>
+  <dialog id="rooms-dialog" aria-labelledby="rooms-title"><div class="dialog-heading"><div><p class="eyebrow">ADMINISTRACIÓN</p><h2 id="rooms-title">Salas</h2></div><button class="close" data-close aria-label="Cerrar">×</button></div><div id="rooms-list"></div><form id="room-form"><label>Nueva sala<input name="name" required placeholder="Nombre de la sala"></label><button class="primary">Agregar sala</button></form><p class="form-error" id="room-error" role="alert"></p></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><h2 id="confirm-title"></h2><p id="confirm-text"></p><div class="actions"><button id="cancel-delete">Cancelar</button><button id="confirm-delete" class="danger solid">Eliminar</button></div><p id="confirm-error" class="form-error" role="alert"></p></dialog>
+</body></html>
