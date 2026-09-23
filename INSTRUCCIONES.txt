@@ -1,0 +1,62 @@
+AGENDA DE SALAS AUDIOVISUALES - VERSIÓN FIREBASE EN TIEMPO REAL
+
+ARCHIVOS EN GITHUB
+Repositorio: agenda-audiovisuales
+Todos estos archivos van en la raíz del repositorio, junto a .nojekyll y README.md.
+
+REEMPLAZAR COMPLETAMENTE:
+- index.html
+- app.js
+- storage.js
+- styles.css
+
+AGREGAR COMO ARCHIVO NUEVO:
+- firebase.js
+
+SIN CAMBIOS NECESARIOS:
+- core.js (se incluye en el paquete por comodidad)
+- .nojekyll
+- .gitignore
+- README.md
+- package.json
+- preview.mjs
+- core.test.js
+
+REGLAS DE FIRESTORE
+1. Firebase Console > Firestore > Reglas.
+2. Abrir el archivo firestore.rules de este paquete.
+3. Copiar TODO su contenido.
+4. Reemplazar las reglas de Firebase por ese contenido.
+5. Pulsar Publicar.
+
+PRIMER ARRANQUE
+1. Publicar los archivos en GitHub Pages.
+2. Abrir https://igutierrezb.github.io/agenda-audiovisuales/
+3. Iniciar sesión PRIMERO con ivan.gutierrez@uteq.edu.mx.
+4. La primera entrada del administrador crea las dos salas iniciales y registra los cinco usuarios autorizados.
+5. Esperar a que en la parte superior aparezca "● En tiempo real".
+6. Después podrán iniciar sesión los otros usuarios autorizados.
+
+USUARIOS INICIALES
+- ivan.gutierrez@uteq.edu.mx (administrador de accesos)
+- monica.arellano@uteq.edu.mx
+- jorge.cervantes@uteq.edu.mx
+- aurora.osornio@uteq.edu.mx
+- karina.garcia@uteq.edu.mx
+
+ADMINISTRACIÓN DE ACCESOS
+Solo ivan.gutierrez@uteq.edu.mx ve la sección "Usuarios autorizados" dentro de Administración.
+Desde ahí puede agregar o eliminar otras cuentas.
+
+FUNCIONES PRINCIPALES
+- Agenda compartida en tiempo real mediante Cloud Firestore.
+- Google Authentication.
+- Reservación por clic o por clic sostenido + arrastre vertical.
+- Bloques ocupados en tono rojizo/terracota más visible.
+- Vista por defecto de todas las salas con PA F y PB F bajo cada fecha.
+- Repetición opcional de reservaciones.
+- Prevención de empalmes mediante bloqueos de intervalos de 30 minutos en Firestore.
+- Identificación pequeña del usuario que realizó el apartado.
+- Administración de salas.
+- Reportes Excel mensual, anual o por periodo personalizado, por todas o algunas salas.
+- Sincronización automática para todos los usuarios autorizados conectados.

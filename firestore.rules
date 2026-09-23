@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function isOwner() {
+      return signedIn()
+        && request.auth.token.email == "ivan.gutierrez@uteq.edu.mx";
+    }
+
+    function isAuthorized() {
+      return isOwner()
+        || (
+          signedIn()
+          && exists(/databases/$(database)/documents/authorizedUsers/$(request.auth.token.email))
+        );
+    }
+
+    match /authorizedUsers/{email} {
+      allow get: if isOwner() || (signedIn() && request.auth.token.email == email);
+      allow list: if isOwner();
+      allow create, update, delete: if isOwner();
+    }
+
+    match /rooms/{roomId} {
+      allow read, create, update, delete: if isAuthorized();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthorized();
+      allow create: if isAuthorized()
+        && request.resource.data.createdByEmail == request.auth.token.email;
+      allow update: if isAuthorized()
+        && request.resource.data.createdByEmail == resource.data.createdByEmail;
+      allow delete: if isAuthorized();
+    }
+
+    match /locks/{lockId} {
+      allow read, create, update, delete: if isAuthorized();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,5 +1,10 @@
 import { minutes, timeLabel, dateKey, parseDate, monday, addDays } from './core.js';
 import { repository } from './storage.js';
+import { authService, OWNER_EMAIL } from './firebase.js';
+
+// Densidad visual del calendario: cada bloque representa 30 minutos.
+const SLOT_HEIGHT = 82;
+const HOUR_HEIGHT = SLOT_HEIGHT * 2;
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -48,10 +53,9 @@ let selectedRoom = 'all';
 let currentBooking;
 let confirmAction;
 let noticeTimer;
-
-const channel = 'BroadcastChannel' in window
-  ? new BroadcastChannel('agenda-audiovisuales-updates')
-  : null;
+let currentUser = null;
+let unsubscribeRealtime = null;
+let dragState = null;
 
 function notice(message) {
   $('#notice').textContent = message;
@@ -149,7 +153,7 @@ function render() {
 
       <div class="time-axis">
         ${Array.from({ length: 16 }, (_, i) => `
-          <span class="time-label" style="top:${i * 200}px">${timeLabel(420 + i * 60)}</span>
+          <span class="time-label" style="top:${i * HOUR_HEIGHT}px">${timeLabel(420 + i * 60)}</span>
         `).join('')}
       </div>
 
@@ -171,8 +175,8 @@ function render() {
                 .filter(b => b.date === dateKey(d) && b.roomId === r.id)
                 .map(b => `
                   <button
-                    class="booking ${state.rooms.indexOf(r) % 2 ? 'blue' : ''}"
-                    style="top:${(minutes(b.start) - 420) / 30 * 100 + 3}px;height:${(minutes(b.end) - minutes(b.start)) / 30 * 100 - 6}px"
+                    class="booking"
+                    style="top:${(minutes(b.start) - 420) / 30 * SLOT_HEIGHT + 2}px;height:${Math.max((minutes(b.end) - minutes(b.start)) / 30 * SLOT_HEIGHT - 4, 28)}px"
                     data-booking="${escape(b.id)}"
                     aria-label="${escape(`${b.teacher}, ${b.group}, ${b.activity}, ${b.start} a ${b.end}, ${r.name}`)}"
                     title="${escape(`${r.name}\n${b.teacher} · ${b.group}\n${b.activity}\n${b.start}–${b.end}`)}">
@@ -183,6 +187,7 @@ function render() {
                     ${selectedRoom === 'all' && minutes(b.end) - minutes(b.start) > 30
                       ? `<small>${escape(defaultRoomShort(r))}</small>`
                       : ''}
+                    ${b.createdByLabel ? `<small class="booked-by">por ${escape(b.createdByLabel)}</small>` : ''}
                   </button>
                 `).join('')}
             </div>
@@ -198,7 +203,6 @@ function render() {
 function changed(nextState, message) {
   state = nextState;
   render();
-  channel?.postMessage('changed');
   if (message) notice(message);
 }
 
@@ -289,7 +293,8 @@ function details(id) {
     ['Grupo', b.group],
     ['Actividad', b.activity],
     ['Fecha', fullDate(parseDate(b.date))],
-    ['Horario', `${b.start}–${b.end}`]
+    ['Horario', `${b.start}–${b.end}`],
+    ['Apartado por', b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : '—')]
   ].map(([label, value]) => `
     <div class="detail-row">
       <span>${escape(label)}</span>
@@ -297,6 +302,7 @@ function details(id) {
     </div>
   `).join('');
 
+  $('#delete-series').hidden = !b.seriesId;
   $('#detail-dialog').showModal();
 }
 
@@ -509,13 +515,14 @@ function excelRows(bookings) {
       'Duración (min)': minutes(b.end) - minutes(b.start),
       'Maestro': b.teacher,
       'Grupo': b.group,
-      'Actividad': b.activity
+      'Actividad': b.activity,
+      'Registrado por': b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : '')
     };
   });
 }
 
 function downloadCsv(rows, fileName) {
-  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad'];
+  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad', 'Registrado por'];
   const quote = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const csv = '\uFEFF' + [
     headers.map(quote).join(','),
@@ -548,14 +555,14 @@ function exportReport() {
     return;
   }
 
-  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad'];
+  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad', 'Registrado por'];
   const dataSheet = rows.length
     ? window.XLSX.utils.json_to_sheet(rows, { header: headers })
     : window.XLSX.utils.aoa_to_sheet([headers]);
 
   dataSheet['!cols'] = [
     { wch: 12 }, { wch: 12 }, { wch: 34 }, { wch: 13 }, { wch: 13 },
-    { wch: 13 }, { wch: 15 }, { wch: 30 }, { wch: 16 }, { wch: 44 }
+    { wch: 13 }, { wch: 15 }, { wch: 30 }, { wch: 16 }, { wch: 44 }, { wch: 22 }
   ];
 
   const summarySheet = window.XLSX.utils.aoa_to_sheet([
@@ -605,18 +612,66 @@ $('#day-picker').onclick = event => {
 
 $('#calendar').onclick = event => {
   const booking = event.target.closest('[data-booking]');
-  if (booking) return details(booking.dataset.booking);
-
-  const slot = event.target.closest('.slot');
-  if (slot) {
-    openBooking({
-      roomId: slot.dataset.room,
-      date: slot.dataset.date,
-      start: slot.dataset.start,
-      end: timeLabel(Math.min(minutes(slot.dataset.start) + 60, 1320))
-    });
-  }
+  if (booking) details(booking.dataset.booking);
 };
+
+function clearDragSelection() {
+  document.querySelectorAll('.slot.drag-selected').forEach(slot => slot.classList.remove('drag-selected'));
+  $('#calendar').classList.remove('dragging');
+}
+
+function paintDragSelection() {
+  clearDragSelection();
+  if (!dragState) return;
+  $('#calendar').classList.add('dragging');
+  const [from, to] = [dragState.startIndex, dragState.endIndex].sort((a, b) => a - b);
+  dragState.slots.forEach((slot, index) => {
+    if (index >= from && index <= to) slot.classList.add('drag-selected');
+  });
+}
+
+$('#calendar').addEventListener('pointerdown', event => {
+  const slot = event.target.closest('.slot');
+  if (!slot || event.button !== 0) return;
+  event.preventDefault();
+
+  const lane = slot.closest('.lane');
+  const slots = Array.from(lane.querySelectorAll('.slot'));
+  const index = slots.indexOf(slot);
+  dragState = {
+    pointerId: event.pointerId,
+    lane, slots, startIndex: index, endIndex: index, moved: false,
+    roomId: slot.dataset.room, date: slot.dataset.date
+  };
+  slot.setPointerCapture?.(event.pointerId);
+  paintDragSelection();
+});
+
+$('#calendar').addEventListener('pointermove', event => {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.slot');
+  if (!target || target.closest('.lane') !== dragState.lane) return;
+  const index = dragState.slots.indexOf(target);
+  if (index < 0 || index === dragState.endIndex) return;
+  dragState.endIndex = index;
+  dragState.moved = dragState.moved || index !== dragState.startIndex;
+  paintDragSelection();
+});
+
+window.addEventListener('pointerup', event => {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  const active = dragState;
+  const [from, to] = [active.startIndex, active.endIndex].sort((a, b) => a - b);
+  const start = timeLabel(420 + from * 30);
+  const end = active.moved
+    ? timeLabel(Math.min(420 + (to + 1) * 30, 1320))
+    : timeLabel(Math.min(420 + from * 30 + 60, 1320));
+  dragState = null;
+  clearDragSelection();
+  openBooking({ roomId: active.roomId, date: active.date, start, end });
+});
+
+window.addEventListener('pointercancel', () => { dragState = null; clearDragSelection(); });
 
 $('#previous').onclick = () => {
   week = addDays(week, -7);
@@ -659,8 +714,8 @@ $('#booking-form').onsubmit = async event => {
     const bookings = createBookingSeries(form);
     const base = bookings[0];
     const next = bookings.length > 1
-      ? await repository.saveBookings(bookings)
-      : await repository.saveBooking(base);
+      ? await repository.saveBookings(bookings, currentUser?.email)
+      : await repository.saveBooking(base, currentUser?.email);
 
     week = monday(parseDate(base.date));
     selectedDay = Math.min((parseDate(base.date).getDay() + 6) % 7, 5);
@@ -698,6 +753,19 @@ $('#delete-booking').onclick = () => {
   );
 };
 
+$('#delete-series').onclick = () => {
+  if (!currentBooking?.seriesId) return;
+  const seriesId = currentBooking.seriesId;
+  confirmDelete(
+    '¿Eliminar toda la serie?',
+    'Se eliminarán todas las reservaciones creadas dentro de esta repetición.',
+    async () => {
+      changed(await repository.deleteSeries(seriesId), 'Serie de reservaciones eliminada.');
+      $('#detail-dialog').close();
+    }
+  );
+};
+
 $('#cancel-delete').onclick = () => $('#confirm-dialog').close();
 
 $('#confirm-delete').onclick = async event => {
@@ -714,12 +782,16 @@ $('#confirm-delete').onclick = async event => {
   }
 };
 
-$('#manage').onclick = () => {
+$('#manage').onclick = async () => {
   renderRooms();
   setupReportDefaults();
   toggleReportPeriodFields();
   $('#room-error').textContent = '';
   $('#report-error').textContent = '';
+  $('#user-error').textContent = '';
+  const owner = authService.isOwner(currentUser);
+  $('#users-admin-section').hidden = !owner;
+  if (owner) await renderAuthorizedUsers();
   $('#rooms-dialog').showModal();
 };
 
@@ -803,21 +875,125 @@ $('#report-form').onsubmit = event => {
   }
 };
 
-async function refresh() {
-  try {
-    state = await repository.read();
-    render();
-    if ($('#rooms-dialog').open) renderRooms();
-  } catch (error) {
-    notice(error.message);
-  }
+async function renderAuthorizedUsers() {
+  if (!authService.isOwner(currentUser)) return;
+  const users = await repository.listAuthorizedUsers();
+  $('#users-list').innerHTML = users.map(user => `
+    <div class="user-row">
+      <div>
+        <strong>${escape(user.name || user.email)}</strong>
+        <span>${escape(user.email)}</span>
+      </div>
+      ${user.email === OWNER_EMAIL
+        ? '<span class="owner-badge">Administrador</span>'
+        : `<button type="button" class="danger" data-remove-user="${escape(user.email)}">Eliminar</button>`}
+    </div>
+  `).join('');
 }
 
-if (channel) channel.onmessage = refresh;
+$('#user-form').onsubmit = async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  $('#user-error').textContent = '';
+  try {
+    await repository.saveAuthorizedUser(form.elements.name.value, form.elements.email.value);
+    form.reset();
+    await renderAuthorizedUsers();
+    notice('Usuario autorizado agregado.');
+  } catch (error) {
+    $('#user-error').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
 
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) refresh();
-});
+$('#users-list').onclick = event => {
+  const button = event.target.closest('[data-remove-user]');
+  if (!button) return;
+  const email = button.dataset.removeUser;
+  confirmDelete(
+    '¿Retirar acceso?',
+    `La cuenta ${email} dejará de poder consultar y modificar la agenda.`,
+    async () => {
+      await repository.deleteAuthorizedUser(email);
+      await renderAuthorizedUsers();
+      notice('Acceso retirado.');
+    }
+  );
+};
+
+function showAuth(message, denied = false) {
+  document.body.classList.add('auth-pending');
+  $('#auth-screen').hidden = false;
+  $('#auth-message').textContent = message;
+  $('#sign-in').hidden = denied;
+  $('#auth-sign-out').hidden = !denied;
+}
+
+function showApp(user) {
+  currentUser = user;
+  document.body.classList.remove('auth-pending');
+  $('#auth-screen').hidden = true;
+  $('#user-chip').textContent = authService.username(user);
+}
+
+function startRealtime() {
+  unsubscribeRealtime?.();
+  $('#sync-status').textContent = '● Sincronizando';
+  $('#sync-status').classList.remove('online');
+  unsubscribeRealtime = repository.subscribe(nextState => {
+    state = nextState;
+    render();
+    if ($('#rooms-dialog').open) renderRooms();
+    $('#sync-status').textContent = '● En tiempo real';
+    $('#sync-status').classList.add('online');
+  }, error => {
+    $('#sync-status').textContent = '● Sin conexión';
+    $('#sync-status').classList.remove('online');
+    notice(error.message || 'No se pudo sincronizar con Firebase.');
+  });
+}
+
+$('#sign-in').onclick = async () => {
+  $('#sign-in').disabled = true;
+  try {
+    await authService.signIn();
+  } catch (error) {
+    $('#auth-message').textContent = error.message || 'No se pudo iniciar sesión.';
+  } finally {
+    $('#sign-in').disabled = false;
+  }
+};
+
+$('#sign-out').onclick = () => authService.signOut();
+$('#auth-sign-out').onclick = () => authService.signOut();
 
 $('#new').disabled = true;
-refresh();
+showAuth('Comprobando sesión…');
+
+authService.onChange(async user => {
+  unsubscribeRealtime?.();
+  unsubscribeRealtime = null;
+  currentUser = null;
+
+  if (!user) {
+    showAuth('Inicia sesión con una cuenta autorizada para consultar y modificar la agenda compartida.');
+    return;
+  }
+
+  try {
+    if (authService.isOwner(user)) await repository.bootstrapOwner(user.email);
+    const authorized = await repository.isAuthorized(user.email);
+    if (!authorized) {
+      showAuth(`La cuenta ${user.email} no está autorizada para esta agenda.`, true);
+      return;
+    }
+
+    showApp(user);
+    startRealtime();
+  } catch (error) {
+    showAuth(error.message || 'No se pudo validar el acceso.', true);
+  }
+});

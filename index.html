@@ -11,7 +11,19 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
   <script type="module" src="app.js"></script>
 </head>
-<body>
+<body class="auth-pending">
+  <section id="auth-screen" class="auth-screen" aria-live="polite">
+    <div class="auth-card">
+      <span class="auth-icon" aria-hidden="true">▦</span>
+      <p class="eyebrow">DIVISIÓN INDUSTRIAL</p>
+      <h1>Reservación de Salas Audiovisuales</h1>
+      <p id="auth-message">Inicia sesión con una cuenta autorizada para consultar y modificar la agenda compartida.</p>
+      <button id="sign-in" class="primary auth-button">Iniciar sesión con Google</button>
+      <button id="auth-sign-out" class="quiet auth-button" hidden>Cerrar sesión</button>
+      <small>Agenda sincronizada en tiempo real.</small>
+    </div>
+  </section>
+
   <header class="topbar">
     <a class="brand" href="./">
       <span class="brand-icon" aria-hidden="true">▦</span>
@@ -21,7 +33,12 @@
         <em>División Industrial</em>
       </span>
     </a>
-    <button id="manage" class="quiet">Administración</button>
+    <div class="top-actions">
+      <span id="sync-status" class="sync-status" title="Estado de sincronización">● Sincronizando</span>
+      <span id="user-chip" class="user-chip"></span>
+      <button id="manage" class="quiet">Administración</button>
+      <button id="sign-out" class="quiet">Salir</button>
+    </div>
   </header>
 
   <main>
@@ -56,7 +73,7 @@
       <div id="calendar" class="calendar"></div>
 
       <div class="calendar-footer">
-        <span>Selecciona un horario libre para reservar.</span>
+        <span>Haz clic o mantén presionado y arrastra para seleccionar el horario.</span>
         <span>Lunes a sábado · 07:00–22:00</span>
       </div>
     </section>
@@ -160,6 +177,7 @@
     <div id="details"></div>
     <div class="actions">
       <button id="delete-booking" class="danger">Eliminar</button>
+      <button id="delete-series" class="danger" hidden>Eliminar serie</button>
       <button data-close>Cerrar</button>
       <button id="edit-booking" class="primary">Editar</button>
     </div>
@@ -169,7 +187,7 @@
     <div class="dialog-heading">
       <div>
         <p class="eyebrow">ADMINISTRACIÓN</p>
-        <h2 id="rooms-title">Salas y reportes</h2>
+        <h2 id="rooms-title">Salas, usuarios y reportes</h2>
       </div>
       <button class="close" data-close aria-label="Cerrar">×</button>
     </div>
@@ -198,6 +216,32 @@
         <button class="primary">Agregar sala</button>
       </form>
       <p class="form-error" id="room-error" role="alert"></p>
+    </section>
+
+    <section id="users-admin-section" class="admin-section" hidden>
+      <div class="section-heading">
+        <div>
+          <h3>Usuarios autorizados</h3>
+          <p>Solo la cuenta administradora puede agregar o retirar accesos. Los cambios se aplican en Firebase.</p>
+        </div>
+      </div>
+
+      <div id="users-list" class="users-list"></div>
+
+      <form id="user-form" class="new-user-form">
+        <div class="form-row">
+          <label>
+            Nombre
+            <input name="name" required placeholder="Nombre completo">
+          </label>
+          <label>
+            Correo
+            <input type="email" name="email" required placeholder="usuario@uteq.edu.mx">
+          </label>
+        </div>
+        <button class="primary">＋ Agregar usuario</button>
+      </form>
+      <p class="form-error" id="user-error" role="alert"></p>
     </section>
 
     <section class="admin-section report-section">
