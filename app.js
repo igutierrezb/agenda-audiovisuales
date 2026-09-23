@@ -783,15 +783,28 @@ $('#confirm-delete').onclick = async event => {
 };
 
 $('#manage').onclick = async () => {
-  renderRooms();
+  const owner = authService.isOwner(currentUser);
+
   setupReportDefaults();
-  toggleReportPeriodFields();
   $('#room-error').textContent = '';
   $('#report-error').textContent = '';
   $('#user-error').textContent = '';
-  const owner = authService.isOwner(currentUser);
+
+  // Solo la cuenta administradora gestiona salas y usuarios.
+  $('#rooms-admin-section').hidden = !owner;
   $('#users-admin-section').hidden = !owner;
-  if (owner) await renderAuthorizedUsers();
+
+  if (owner) {
+    renderRooms();
+    await renderAuthorizedUsers();
+    $('#rooms-title').textContent = 'Salas, usuarios y reportes';
+  } else {
+    // Los demás usuarios autorizados conservan acceso completo al concentrado.
+    renderReportRoomOptions();
+    $('#rooms-title').textContent = 'Reporte de reservaciones';
+  }
+
+  toggleReportPeriodFields();
   $('#rooms-dialog').showModal();
 };
 
@@ -937,6 +950,11 @@ function showApp(user) {
   document.body.classList.remove('auth-pending');
   $('#auth-screen').hidden = true;
   $('#user-chip').textContent = authService.username(user);
+
+  // El administrador ve "Administración"; el resto ve directamente "Reportes".
+  $('#manage').textContent = authService.isOwner(user)
+    ? 'Administración'
+    : 'Reportes';
 }
 
 function startRealtime() {
@@ -946,7 +964,13 @@ function startRealtime() {
   unsubscribeRealtime = repository.subscribe(nextState => {
     state = nextState;
     render();
-    if ($('#rooms-dialog').open) renderRooms();
+    if ($('#rooms-dialog').open) {
+      if (authService.isOwner(currentUser)) {
+        renderRooms();
+      } else {
+        renderReportRoomOptions();
+      }
+    }
     $('#sync-status').textContent = '● En tiempo real';
     $('#sync-status').classList.add('online');
   }, error => {

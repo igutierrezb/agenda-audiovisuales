@@ -18,33 +18,56 @@ service cloud.firestore {
       return isOwner()
         || (
           signedIn()
-          && exists(/databases/$(database)/documents/authorizedUsers/$(request.auth.token.email))
+          && exists(
+            /databases/$(database)/documents/authorizedUsers/$(request.auth.token.email)
+          )
         );
     }
 
+    // USUARIOS AUTORIZADOS
+    // Iván es el único que puede ver la lista completa, agregar o retirar accesos.
+    // Cada usuario puede consultar su propio registro para validar su acceso.
     match /authorizedUsers/{email} {
-      allow get: if isOwner() || (signedIn() && request.auth.token.email == email);
+      allow get: if isOwner()
+        || (
+          signedIn()
+          && request.auth.token.email == email
+        );
+
       allow list: if isOwner();
       allow create, update, delete: if isOwner();
     }
 
+    // SALAS
+    // Todos los autorizados pueden consultarlas.
+    // Solo Iván puede crear, renombrar o eliminar salas.
     match /rooms/{roomId} {
-      allow read, create, update, delete: if isAuthorized();
+      allow read: if isAuthorized();
+      allow create, update, delete: if isOwner();
     }
 
+    // RESERVACIONES
+    // Todos los usuarios autorizados pueden crear, editar y eliminar.
+    // Al editar no se permite cambiar quién creó originalmente la reservación.
     match /bookings/{bookingId} {
       allow read: if isAuthorized();
+
       allow create: if isAuthorized()
         && request.resource.data.createdByEmail == request.auth.token.email;
+
       allow update: if isAuthorized()
         && request.resource.data.createdByEmail == resource.data.createdByEmail;
+
       allow delete: if isAuthorized();
     }
 
+    // BLOQUEOS DE HORARIO
+    // El código usa esta colección para impedir empalmes simultáneos.
     match /locks/{lockId} {
       allow read, create, update, delete: if isAuthorized();
     }
 
+    // Todo lo demás queda bloqueado.
     match /{document=**} {
       allow read, write: if false;
     }
