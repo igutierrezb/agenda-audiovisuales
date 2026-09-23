@@ -52,6 +52,7 @@ function bookingShape(booking) {
     teacher: cleanText(booking.teacher),
     group: cleanText(booking.group),
     activity: cleanText(booking.activity),
+    colorKey: cleanText(booking.colorKey),
     seriesId: cleanText(booking.seriesId)
   };
 }
@@ -228,6 +229,7 @@ export const repository = {
         teacher: booking.teacher,
         group: booking.group,
         activity: booking.activity,
+        colorKey: booking.colorKey || previous?.colorKey || '',
         seriesId: booking.seriesId || previous?.seriesId || '',
         createdByEmail: previous?.createdByEmail || actor,
         createdByLabel: previous?.createdByLabel || actor.split('@')[0],
@@ -298,6 +300,7 @@ export const repository = {
           teacher: booking.teacher,
           group: booking.group,
           activity: booking.activity,
+          colorKey: booking.colorKey || '',
           seriesId,
           createdByEmail: actor,
           createdByLabel: actor.split('@')[0],

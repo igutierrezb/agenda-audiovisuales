@@ -1,31 +1,33 @@
-VERSIÓN V5.0 · MEJORAS VISUALES
+VERSIÓN V5.1 · PALETA PASTEL POR RESERVACIÓN
 
 ARCHIVOS A REEMPLAZAR EN GITHUB:
 - index.html
 - app.js
 - styles.css
+- storage.js
 
 NO CAMBIAR:
 - firebase.js
-- storage.js
 - core.js
 - firestore.rules
 
-MEJORAS:
-- Altura de cada bloque de 30 min: 48 px.
-- Encabezados de días fijos al hacer scroll.
-- Columna de horas fija al desplazarse horizontalmente.
-- Línea roja de hora actual.
-- Color de Iván: amarillo suave y armónico.
-- Colores de usuarios diferenciados.
-- Tarjetas más compactas: hora, maestro, grupo + actividad.
-- Botón Duplicar reservación.
-- Filtros rápidos: Hoy, Mis reservaciones, Esta semana.
-- Indicador Disponible/Ocupado durante selección.
-- Día actual resaltado suavemente.
-- Sábados con fondo gris muy tenue.
-- En móvil se muestra un solo día con las salas lado a lado.
+NOVEDADES:
+- Al crear o editar una reservación aparece una paleta de 8 colores pastel.
+- Los fondos son ligeramente transparentes.
+- Las letras conservan alto contraste para legibilidad.
+- Iván tiene por defecto Morado pastel translúcido.
+- Mónica: Menta.
+- Jorge: Azul.
+- Aurora: Rosa.
+- Karina: Durazno.
+- Los usuarios futuros reciben automáticamente un color por defecto estable.
+- El usuario puede cambiar manualmente el color de cada reservación.
+- El color elegido queda guardado en Firestore y permanece al editar.
+- El pequeño punto junto al autor conserva el color por defecto del creador para identificar quién la registró.
 
-Después del commit:
-- Esperar 1 minuto.
-- Abrir la página y hacer Ctrl+F5 una vez.
+FIRESTORE.RULES:
+- No requiere cambios para esta mejora.
+
+DESPUÉS DEL COMMIT:
+- Esperar aproximadamente 1 minuto.
+- Hacer Ctrl+F5 una sola vez.

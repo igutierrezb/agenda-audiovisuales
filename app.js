@@ -1,5 +1,5 @@
 import { minutes, timeLabel, dateKey, parseDate, monday, addDays } from './core.js';
-import { repository } from './storage.js?v=4.1';
+import { repository } from './storage.js?v=5.1';
 import { authService, OWNER_EMAIL } from './firebase.js?v=4.1';
 
 // Densidad visual del calendario: cada bloque representa 30 minutos.
@@ -22,59 +22,136 @@ const fullDate = date => date.toLocaleDateString('es-MX', {
   year: 'numeric'
 });
 
-const USER_PALETTES = {
-  'ivan.gutierrez@uteq.edu.mx': {
-    bg: '#fff2b8',
-    hover: '#ffe894',
-    border: '#d5aa33',
-    accent: '#b88716',
-    ink: '#624b0c'
+const PASTEL_PALETTES = {
+  lavender: {
+    label: 'Morado',
+    bg: 'rgba(220, 209, 247, .68)',
+    hover: 'rgba(211, 196, 243, .82)',
+    border: '#9a80c7',
+    accent: '#7b5eae',
+    ink: '#34244f'
   },
-  'monica.arellano@uteq.edu.mx': {
-    bg: '#d7eee9',
-    hover: '#c4e5de',
-    border: '#58a092',
-    accent: '#338678',
-    ink: '#245a51'
+  mint: {
+    label: 'Menta',
+    bg: 'rgba(205, 239, 229, .68)',
+    hover: 'rgba(190, 232, 220, .82)',
+    border: '#69a895',
+    accent: '#448d79',
+    ink: '#1f5044'
   },
-  'jorge.cervantes@uteq.edu.mx': {
-    bg: '#dce8f6',
-    hover: '#c8daf0',
-    border: '#6a94c3',
-    accent: '#4c7fb7',
-    ink: '#2e527a'
+  sky: {
+    label: 'Azul',
+    bg: 'rgba(210, 229, 249, .68)',
+    hover: 'rgba(196, 218, 244, .82)',
+    border: '#729dc9',
+    accent: '#4d7fb2',
+    ink: '#233f61'
   },
-  'aurora.osornio@uteq.edu.mx': {
-    bg: '#e9e0f2',
-    hover: '#dcd0eb',
-    border: '#9476b4',
-    accent: '#7d5ba4',
-    ink: '#563e72'
+  rose: {
+    label: 'Rosa',
+    bg: 'rgba(246, 216, 229, .68)',
+    hover: 'rgba(239, 202, 219, .82)',
+    border: '#c07c99',
+    accent: '#a85b7b',
+    ink: '#5d2f44'
   },
-  'karina.garcia@uteq.edu.mx': {
-    bg: '#f3dce6',
-    hover: '#ebc8d7',
-    border: '#bd7895',
-    accent: '#a65778',
-    ink: '#6b3850'
+  peach: {
+    label: 'Durazno',
+    bg: 'rgba(249, 222, 202, .68)',
+    hover: 'rgba(244, 209, 184, .82)',
+    border: '#c98d68',
+    accent: '#ad6f49',
+    ink: '#5a3622'
+  },
+  butter: {
+    label: 'Amarillo',
+    bg: 'rgba(249, 237, 187, .70)',
+    hover: 'rgba(245, 229, 163, .84)',
+    border: '#c6a84e',
+    accent: '#a6872c',
+    ink: '#55430f'
+  },
+  aqua: {
+    label: 'Agua',
+    bg: 'rgba(204, 237, 241, .68)',
+    hover: 'rgba(188, 229, 234, .82)',
+    border: '#68a8b1',
+    accent: '#468c96',
+    ink: '#204d54'
+  },
+  sage: {
+    label: 'Salvia',
+    bg: 'rgba(222, 235, 208, .70)',
+    hover: 'rgba(211, 228, 195, .84)',
+    border: '#8ea56f',
+    accent: '#718b51',
+    ink: '#384a27'
   }
 };
 
-function userPalette(email) {
-  email = String(email || '').trim().toLowerCase();
-  if (USER_PALETTES[email]) return USER_PALETTES[email];
+const USER_DEFAULT_COLORS = {
+  'ivan.gutierrez@uteq.edu.mx': 'lavender',
+  'monica.arellano@uteq.edu.mx': 'mint',
+  'jorge.cervantes@uteq.edu.mx': 'sky',
+  'aurora.osornio@uteq.edu.mx': 'rose',
+  'karina.garcia@uteq.edu.mx': 'peach'
+};
 
+function defaultColorKey(email) {
+  email = String(email || '').trim().toLowerCase();
+  if (USER_DEFAULT_COLORS[email]) return USER_DEFAULT_COLORS[email];
+
+  const keys = Object.keys(PASTEL_PALETTES);
   let hash = 0;
   for (const char of email) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
-  const hue = Math.abs(hash) % 360;
+  return keys[Math.abs(hash) % keys.length];
+}
+
+function paletteForKey(key, fallbackEmail = '') {
+  const resolved = PASTEL_PALETTES[key]
+    ? key
+    : defaultColorKey(fallbackEmail);
 
   return {
-    bg: `hsl(${hue} 48% 88%)`,
-    hover: `hsl(${hue} 48% 82%)`,
-    border: `hsl(${hue} 40% 53%)`,
-    accent: `hsl(${hue} 46% 43%)`,
-    ink: `hsl(${hue} 42% 28%)`
+    key: resolved,
+    ...PASTEL_PALETTES[resolved]
   };
+}
+
+function renderBookingColorPalette(selectedKey) {
+  const palette = $('#booking-color-palette');
+  const hidden = $('#booking-color-key');
+  const label = $('#selected-color-name');
+  if (!palette || !hidden) return;
+
+  const selected = paletteForKey(selectedKey, currentUser?.email);
+  hidden.value = selected.key;
+  if (label) label.textContent = selected.label;
+
+  palette.innerHTML = Object.entries(PASTEL_PALETTES).map(([key, item]) => `
+    <button
+      type="button"
+      class="color-swatch"
+      data-color-key="${escape(key)}"
+      role="radio"
+      aria-checked="${key === selected.key}"
+      aria-label="${escape(item.label)}"
+      title="${escape(item.label)}"
+      style="--swatch-bg:${item.bg};--swatch-border:${item.border};--swatch-ink:${item.ink}">
+      <span></span>
+      <small>${escape(item.label)}</small>
+    </button>
+  `).join('');
+}
+
+function selectBookingColor(key) {
+  const selected = paletteForKey(key, currentUser?.email);
+  $('#booking-color-key').value = selected.key;
+  $('#selected-color-name').textContent = selected.label;
+
+  for (const button of $$('#booking-color-palette [data-color-key]')) {
+    button.setAttribute('aria-checked', String(button.dataset.colorKey === selected.key));
+  }
 }
 
 function bookingActor(booking) {
@@ -98,14 +175,16 @@ function bookingActor(booking) {
 
 function bookingColorStyle(booking) {
   const actor = bookingActor(booking);
-  const palette = userPalette(actor.updatedEmail || actor.createdEmail);
+  const palette = paletteForKey(booking?.colorKey, actor.createdEmail || actor.updatedEmail);
+  const creatorPalette = paletteForKey(defaultColorKey(actor.createdEmail), actor.createdEmail);
 
   return [
     `--booking-bg:${palette.bg}`,
     `--booking-hover:${palette.hover}`,
     `--booking-border:${palette.border}`,
     `--booking-accent:${palette.accent}`,
-    `--booking-ink:${palette.ink}`
+    `--booking-ink:${palette.ink}`,
+    `--creator-accent:${creatorPalette.accent}`
   ].join(';');
 }
 
@@ -450,13 +529,20 @@ function openBooking(values = {}) {
     end: '08:00',
     teacher: '',
     group: '',
-    activity: ''
+    activity: '',
+    colorKey: defaultColorKey(currentUser?.email)
   };
 
-  const merged = { ...defaults, ...values };
+  const merged = {
+    ...defaults,
+    ...values,
+    colorKey: values.colorKey || defaultColorKey(values.createdByEmail || currentUser?.email)
+  };
   for (const [key, value] of Object.entries(merged)) {
     if (form.elements[key]) form.elements[key].value = value ?? '';
   }
+
+  renderBookingColorPalette(merged.colorKey);
 
   const editing = Boolean(values.id);
   $('#booking-title').textContent = editing ? 'Editar reservación' : 'Nueva reservación';
@@ -539,7 +625,8 @@ function createBookingSeries(form) {
     end: String(data.get('end') || ''),
     teacher: String(data.get('teacher') || '').trim(),
     group: String(data.get('group') || '').trim(),
-    activity: String(data.get('activity') || '').trim()
+    activity: String(data.get('activity') || '').trim(),
+    colorKey: String(data.get('colorKey') || defaultColorKey(currentUser?.email)).trim()
   };
 
   if (booking.id || !form.elements.repeatEnabled.checked) {
@@ -933,6 +1020,12 @@ $('#booking-form').elements.date.onchange = event => {
 
 $('#repeat-enabled').onchange = toggleRepeatOptions;
 
+$('#booking-color-palette').onclick = event => {
+  const button = event.target.closest('[data-color-key]');
+  if (!button) return;
+  selectBookingColor(button.dataset.colorKey);
+};
+
 $('#booking-form').onsubmit = async event => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -976,7 +1069,8 @@ $('#duplicate-booking').onclick = () => {
     end: currentBooking.end,
     teacher: currentBooking.teacher,
     group: currentBooking.group,
-    activity: currentBooking.activity
+    activity: currentBooking.activity,
+    colorKey: currentBooking.colorKey || defaultColorKey(currentBooking.createdByEmail || currentUser?.email)
   };
 
   $('#detail-dialog').close();
