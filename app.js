@@ -227,6 +227,21 @@ function defaultRoomShort(room) {
   return initials || 'SALA';
 }
 
+function roomPlantClass(room) {
+  const text = `${room?.id || ''} ${room?.name || ''} ${defaultRoomShort(room)}`
+    .toLocaleLowerCase('es-MX');
+
+  if (text.includes('planta alta') || text.includes('alta-f') || /\bpa\b/.test(text)) {
+    return 'plant-high';
+  }
+
+  if (text.includes('planta baja') || text.includes('baja-f') || /\bpb\b/.test(text)) {
+    return 'plant-low';
+  }
+
+  return 'plant-neutral';
+}
+
 let state = { rooms: [], bookings: [] };
 let week = monday(new Date());
 let selectedDay = Math.min((new Date().getDay() + 6) % 7, 5);
@@ -237,6 +252,8 @@ let noticeTimer;
 let currentUser = null;
 let unsubscribeRealtime = null;
 let dragState = null;
+let bookingDragState = null;
+let suppressBookingClick = false;
 let quickView = 'week';
 
 function notice(message) {
@@ -277,12 +294,12 @@ function bookingConflict(roomId, date, start, end, excludeId = '') {
   );
 }
 
-function updateAvailabilityStatus(roomId, date, start, end) {
+function updateAvailabilityStatus(roomId, date, start, end, excludeId = '') {
   const status = $('#availability-status');
   const calendar = $('#calendar');
   if (!status || !roomId || !date || !start || !end) return null;
 
-  const conflict = bookingConflict(roomId, date, start, end);
+  const conflict = bookingConflict(roomId, date, start, end, excludeId);
 
   calendar.classList.toggle('selection-busy', Boolean(conflict));
   calendar.classList.toggle('selection-free', !conflict);
@@ -377,7 +394,7 @@ function render() {
     : state.rooms.filter(r => r.id === selectedRoom);
 
   const roomHeaders = rooms.map(r => `
-    <span title="${escape(r.name)}">${escape(defaultRoomShort(r))}</span>
+    <span class="${roomPlantClass(r)}" title="${escape(r.name)}">${escape(defaultRoomShort(r))}</span>
   `).join('');
 
   const mobileWidth = Math.max(rooms.length * 125, 280);
@@ -419,7 +436,11 @@ function render() {
         return `
           <div class="day-column ${i === selectedDay ? 'selected' : ''} ${isToday ? 'current-day' : ''} ${isSaturday ? 'saturday' : ''}">
             ${rooms.map(r => `
-              <div class="lane" aria-label="${escape(r.name)} · ${escape(fullDate(d))}">
+              <div
+                class="lane ${roomPlantClass(r)}"
+                data-room="${escape(r.id)}"
+                data-date="${key}"
+                aria-label="${escape(r.name)} · ${escape(fullDate(d))}">
                 ${Array.from({ length: 30 }, (_, n) => `
                   <button
                     class="slot"
@@ -908,8 +929,88 @@ $('#day-picker').onclick = event => {
 
 $('#calendar').onclick = event => {
   const booking = event.target.closest('[data-booking]');
-  if (booking) details(booking.dataset.booking);
+  if (!booking) return;
+
+  if (suppressBookingClick) {
+    event.preventDefault();
+    return;
+  }
+
+  details(booking.dataset.booking);
 };
+
+
+function clearBookingDropPreview() {
+  document.querySelectorAll('.booking-drop-preview').forEach(node => node.remove());
+  document.querySelectorAll('.lane.booking-drop-target').forEach(node => node.classList.remove('booking-drop-target'));
+  $('#calendar').classList.remove('booking-moving');
+}
+
+function bookingDropTarget(lane, clientY, booking, grabOffsetY = 0) {
+  if (!lane || !booking) return null;
+
+  const duration = minutes(booking.end) - minutes(booking.start);
+  const durationSlots = Math.max(1, Math.round(duration / 30));
+  const rect = lane.getBoundingClientRect();
+
+  const rawTop = clientY - rect.top - grabOffsetY;
+  const slotIndex = Math.max(
+    0,
+    Math.min(
+      30 - durationSlots,
+      Math.round(rawTop / SLOT_HEIGHT)
+    )
+  );
+
+  const startMinutes = 420 + slotIndex * 30;
+  const endMinutes = startMinutes + durationSlots * 30;
+
+  return {
+    roomId: lane.dataset.room,
+    date: lane.dataset.date,
+    start: timeLabel(startMinutes),
+    end: timeLabel(endMinutes),
+    top: slotIndex * SLOT_HEIGHT + 2,
+    height: Math.max(durationSlots * SLOT_HEIGHT - 4, 24)
+  };
+}
+
+function paintBookingDropPreview(lane, target, booking, conflict) {
+  clearBookingDropPreview();
+  if (!lane || !target || !booking) return;
+
+  const preview = document.createElement('div');
+  preview.className = `booking-drop-preview${conflict ? ' conflict' : ''}`;
+  preview.style.cssText =
+    `top:${target.top}px;height:${target.height}px;${bookingColorStyle(booking)}`;
+
+  preview.innerHTML = `
+    <span>${escape(target.start)}–${escape(target.end)}</span>
+    <strong>${escape(booking.teacher)}</strong>
+    <small>${escape(roomShort(target.roomId))} · ${escape(target.date)}</small>
+  `;
+
+  lane.classList.add('booking-drop-target');
+  lane.appendChild(preview);
+  $('#calendar').classList.add('booking-moving');
+}
+
+function laneUnderPointer(clientX, clientY, sourceBookingElement) {
+  const previousPointerEvents = sourceBookingElement?.style.pointerEvents || '';
+
+  if (sourceBookingElement) {
+    sourceBookingElement.style.pointerEvents = 'none';
+  }
+
+  const element = document.elementFromPoint(clientX, clientY);
+  const lane = element?.closest?.('.lane') || null;
+
+  if (sourceBookingElement) {
+    sourceBookingElement.style.pointerEvents = previousPointerEvents;
+  }
+
+  return lane;
+}
 
 function clearDragSelection() {
   document.querySelectorAll('.slot.drag-selected').forEach(slot => slot.classList.remove('drag-selected'));
@@ -925,6 +1026,166 @@ function paintDragSelection() {
     if (index >= from && index <= to) slot.classList.add('drag-selected');
   });
 }
+
+$('#calendar').addEventListener('pointerdown', event => {
+  const bookingElement = event.target.closest('.booking');
+  if (!bookingElement || event.button !== 0) return;
+
+  const booking = state.bookings.find(item => item.id === bookingElement.dataset.booking);
+  if (!booking) return;
+
+  const rect = bookingElement.getBoundingClientRect();
+
+  bookingDragState = {
+    pointerId: event.pointerId,
+    booking,
+    element: bookingElement,
+    originX: event.clientX,
+    originY: event.clientY,
+    grabOffsetY: Math.max(0, event.clientY - rect.top),
+    moved: false,
+    target: null,
+    targetLane: null,
+    conflict: null
+  };
+
+  bookingElement.setPointerCapture?.(event.pointerId);
+});
+
+$('#calendar').addEventListener('pointermove', event => {
+  if (!bookingDragState || event.pointerId !== bookingDragState.pointerId) return;
+
+  const stateDrag = bookingDragState;
+  const distance = Math.hypot(
+    event.clientX - stateDrag.originX,
+    event.clientY - stateDrag.originY
+  );
+
+  if (!stateDrag.moved && distance < 6) return;
+
+  stateDrag.moved = true;
+  event.preventDefault();
+  stateDrag.element.classList.add('being-dragged');
+
+  const lane = laneUnderPointer(
+    event.clientX,
+    event.clientY,
+    stateDrag.element
+  );
+
+  if (!lane?.dataset.room || !lane?.dataset.date) {
+    stateDrag.target = null;
+    stateDrag.targetLane = null;
+    clearBookingDropPreview();
+    return;
+  }
+
+  const target = bookingDropTarget(
+    lane,
+    event.clientY,
+    stateDrag.booking,
+    stateDrag.grabOffsetY
+  );
+
+  if (!target) return;
+
+  const conflict = bookingConflict(
+    target.roomId,
+    target.date,
+    target.start,
+    target.end,
+    stateDrag.booking.id
+  );
+
+  stateDrag.target = target;
+  stateDrag.targetLane = lane;
+  stateDrag.conflict = conflict || null;
+
+  paintBookingDropPreview(
+    lane,
+    target,
+    stateDrag.booking,
+    Boolean(conflict)
+  );
+
+  updateAvailabilityStatus(
+    target.roomId,
+    target.date,
+    target.start,
+    target.end,
+    stateDrag.booking.id
+  );
+});
+
+window.addEventListener('pointerup', async event => {
+  if (!bookingDragState || event.pointerId !== bookingDragState.pointerId) return;
+
+  const active = bookingDragState;
+  bookingDragState = null;
+
+  active.element.classList.remove('being-dragged');
+
+  if (!active.moved) {
+    clearBookingDropPreview();
+    return;
+  }
+
+  suppressBookingClick = true;
+  setTimeout(() => {
+    suppressBookingClick = false;
+  }, 0);
+
+  const target = active.target;
+  const conflict = active.conflict;
+
+  clearBookingDropPreview();
+
+  if (!target) {
+    notice('Movimiento cancelado: suelta la reservación dentro de una sala.');
+    return;
+  }
+
+  if (conflict) {
+    notice(`No se puede mover: ${conflict.teacher} ya ocupa ${conflict.start}–${conflict.end}.`);
+    return;
+  }
+
+  const unchanged =
+    target.roomId === active.booking.roomId &&
+    target.date === active.booking.date &&
+    target.start === active.booking.start &&
+    target.end === active.booking.end;
+
+  if (unchanged) {
+    notice('La reservación quedó en el mismo lugar.');
+    return;
+  }
+
+  try {
+    const movedBooking = {
+      ...active.booking,
+      roomId: target.roomId,
+      date: target.date,
+      start: target.start,
+      end: target.end
+    };
+
+    changed(
+      await repository.saveBooking(movedBooking, currentUser?.email),
+      `Reservación movida a ${roomShort(target.roomId)} · ${target.date} · ${target.start}–${target.end}.`
+    );
+  } catch (error) {
+    notice(error.message || 'No se pudo mover la reservación.');
+  }
+});
+
+window.addEventListener('pointercancel', event => {
+  if (!bookingDragState || event.pointerId !== bookingDragState.pointerId) return;
+
+  bookingDragState.element?.classList.remove('being-dragged');
+  bookingDragState = null;
+  clearBookingDropPreview();
+});
 
 $('#calendar').addEventListener('pointerdown', event => {
   const slot = event.target.closest('.slot');
@@ -1353,7 +1614,7 @@ $('#sign-out').onclick = () => authService.signOut();
 $('#auth-sign-out').onclick = () => authService.signOut();
 
 setInterval(() => {
-  if (currentUser && !dragState) render();
+  if (currentUser && !dragState && !bookingDragState) render();
 }, 60000);
 
 $('#new').disabled = true;

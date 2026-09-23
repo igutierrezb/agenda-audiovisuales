@@ -1077,3 +1077,124 @@ input, select, textarea, button {
     grid-template-columns: repeat(4, minmax(48px, 1fr));
   }
 }
+
+
+/* ===== V5.2 · plantas diferenciadas + arrastrar reservaciones ===== */
+
+/* Diferenciación muy sutil entre Planta Alta y Planta Baja. */
+.room-heads span.plant-high {
+  background-color: rgba(87, 137, 151, .045);
+}
+
+.room-heads span.plant-low {
+  background-color: rgba(166, 139, 103, .05);
+}
+
+.lane.plant-high {
+  background-color: rgba(84, 137, 151, .018);
+}
+
+.lane.plant-low {
+  background-color: rgba(169, 140, 100, .022);
+}
+
+/* Un divisor discreto refuerza la separación sin hacer ruido visual. */
+.lane.plant-low {
+  box-shadow: inset 1px 0 0 rgba(118, 132, 134, .12);
+}
+
+/* El gris tenue del sábado sigue siendo visible debajo de los tintes de planta. */
+.day-column.saturday .lane.plant-high {
+  background-color: rgba(92, 129, 137, .028);
+}
+
+.day-column.saturday .lane.plant-low {
+  background-color: rgba(145, 132, 115, .032);
+}
+
+.booking {
+  cursor: grab;
+  user-select: none;
+}
+
+.booking:active {
+  cursor: grabbing;
+}
+
+.booking.being-dragged {
+  opacity: .42;
+  cursor: grabbing;
+  filter: saturate(.82);
+}
+
+.calendar.booking-moving .slot:hover::after {
+  content: '';
+}
+
+.lane.booking-drop-target {
+  box-shadow:
+    inset 0 0 0 1px rgba(76, 132, 122, .14),
+    inset 1px 0 0 rgba(118, 132, 134, .08);
+}
+
+.booking-drop-preview {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 24px;
+  padding: 3px 5px;
+  overflow: hidden;
+  pointer-events: none;
+  border: 1px dashed var(--booking-border, #9a80c7);
+  border-left: 4px solid var(--booking-accent, #7b5eae);
+  border-radius: 6px;
+  background: var(--booking-bg, rgba(220, 209, 247, .68));
+  color: var(--booking-ink, #34244f);
+  box-shadow: 0 4px 12px rgba(28, 62, 65, .12);
+  backdrop-filter: saturate(105%);
+  -webkit-backdrop-filter: saturate(105%);
+}
+
+.booking-drop-preview span {
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.booking-drop-preview strong {
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.booking-drop-preview small {
+  overflow: hidden;
+  font-size: 8px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.booking-drop-preview.conflict {
+  border-color: #c65f57;
+  border-left-color: #b54e47;
+  background: rgba(248, 218, 214, .82);
+  color: #642d29;
+  box-shadow: 0 0 0 1px rgba(181, 78, 71, .18);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .booking:hover {
+    transform: translateY(-1px);
+  }
+
+  .booking.being-dragged:hover {
+    transform: none;
+  }
+}

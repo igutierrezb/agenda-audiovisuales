@@ -1,33 +1,28 @@
-VERSIÓN V5.1 · PALETA PASTEL POR RESERVACIÓN
+VERSIÓN V5.2 · COLUMNAS DE PLANTA + MOVER RESERVACIONES
 
 ARCHIVOS A REEMPLAZAR EN GITHUB:
 - index.html
 - app.js
 - styles.css
-- storage.js
 
 NO CAMBIAR:
+- storage.js
 - firebase.js
 - core.js
 - firestore.rules
 
-NOVEDADES:
-- Al crear o editar una reservación aparece una paleta de 8 colores pastel.
-- Los fondos son ligeramente transparentes.
-- Las letras conservan alto contraste para legibilidad.
-- Iván tiene por defecto Morado pastel translúcido.
-- Mónica: Menta.
-- Jorge: Azul.
-- Aurora: Rosa.
-- Karina: Durazno.
-- Los usuarios futuros reciben automáticamente un color por defecto estable.
-- El usuario puede cambiar manualmente el color de cada reservación.
-- El color elegido queda guardado en Firestore y permanece al editar.
-- El pequeño punto junto al autor conserva el color por defecto del creador para identificar quién la registró.
-
-FIRESTORE.RULES:
-- No requiere cambios para esta mejora.
+MEJORAS:
+1. Planta Alta y Planta Baja tienen un tinte de fondo muy sutil y distinto.
+2. Se conserva el fondo gris tenue de los sábados.
+3. Puedes tomar una reservación existente y arrastrarla:
+   - a otra sala,
+   - a otro día visible,
+   - o a otro horario.
+4. Al arrastrar se muestra una previsualización.
+5. Si el destino está ocupado, la previsualización cambia a rojo y el movimiento no se guarda.
+6. Si el destino está libre, al soltar se actualiza Firebase y todos los usuarios lo ven en tiempo real.
+7. El botón Editar sigue siendo la alternativa para cambiar la reservación sin arrastrar.
 
 DESPUÉS DEL COMMIT:
-- Esperar aproximadamente 1 minuto.
-- Hacer Ctrl+F5 una sola vez.
+- Espera aproximadamente 1 minuto.
+- Haz Ctrl+F5 una sola vez.
