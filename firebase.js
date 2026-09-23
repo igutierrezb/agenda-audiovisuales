@@ -10,7 +10,7 @@ import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebas
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBraCb0edGQRgI5xdPUKrkYu68ocWXUnlM',
-  authDomain: 'agenda-audiovisuales-din.firebaseapp.com',
+  authDomain: "agenda-audiovisuales-din.web.app",
   projectId: 'agenda-audiovisuales-din',
   storageBucket: 'agenda-audiovisuales-din.firebasestorage.app',
   messagingSenderId: '698480736599',
