@@ -1,6 +1,6 @@
 import { minutes, timeLabel, dateKey, parseDate, monday, addDays } from './core.js';
-import { repository } from './storage.js';
-import { authService, OWNER_EMAIL } from './firebase.js';
+import { repository } from './storage.js?v=4.1';
+import { authService, OWNER_EMAIL } from './firebase.js?v=4.1';
 
 // Densidad visual del calendario: cada bloque representa 30 minutos.
 const SLOT_HEIGHT = 82;
@@ -1085,13 +1085,29 @@ function startRealtime() {
 }
 
 $('#sign-in').onclick = async () => {
-  $('#sign-in').disabled = true;
+  const button = $('#sign-in');
+  button.disabled = true;
+  $('#auth-message').textContent = 'Abriendo inicio de sesión de Google…';
+
   try {
     await authService.signIn();
   } catch (error) {
-    $('#auth-message').textContent = error.message || 'No se pudo iniciar sesión.';
+    const code = String(error?.code || '');
+
+    const friendly = {
+      'auth/popup-blocked': 'El navegador bloqueó la ventana de Google. Permite ventanas emergentes para este sitio y vuelve a intentarlo.',
+      'auth/popup-closed-by-user': 'La ventana de Google se cerró antes de terminar. Vuelve a intentarlo.',
+      'auth/cancelled-popup-request': 'Ya existe una ventana de inicio de sesión abierta.',
+      'auth/network-request-failed': 'No se pudo conectar con Google/Firebase. Revisa la conexión y vuelve a intentarlo.',
+      'auth/unauthorized-domain': 'Este dominio todavía no está autorizado en Firebase Authentication.'
+    };
+
+    $('#auth-message').textContent =
+      friendly[code]
+      || error?.message
+      || 'No se pudo iniciar sesión.';
   } finally {
-    $('#sign-in').disabled = false;
+    button.disabled = false;
   }
 };
 

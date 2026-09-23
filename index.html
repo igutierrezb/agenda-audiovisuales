@@ -7,9 +7,9 @@
   <meta name="description" content="Agenda semanal de reservación de salas audiovisuales de la División Industrial.">
   <title>Reservación de Salas Audiovisuales · División Industrial</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=4.1">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=4.1"></script>
 </head>
 <body class="auth-pending">
   <section id="auth-screen" class="auth-screen" aria-live="polite">
@@ -21,6 +21,7 @@
       <button id="sign-in" class="primary auth-button">Iniciar sesión con Google</button>
       <button id="auth-sign-out" class="quiet auth-button" hidden>Cerrar sesión</button>
       <small>Agenda sincronizada en tiempo real.</small>
+      <small class="auth-credit">Elaborada y administrada por Iván Gutiérrez Bautista</small>
     </div>
   </section>
 

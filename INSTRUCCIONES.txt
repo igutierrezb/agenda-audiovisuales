@@ -1,33 +1,26 @@
-VERSIÓN V3 - COLORES POR USUARIO + TIPOGRAFÍA MÁS LIMPIA
+CORRECCIÓN V4.1 - INICIO DE SESIÓN
+
+PROBLEMA CORREGIDO:
+- El popup de Google se abre directamente desde el clic.
+- Firebase Auth se inicializa con browserLocalPersistence desde el inicio.
+- Se eliminó el await previo al popup que podía impedir que Chrome lo abriera.
+- Se agregaron versiones ?v=4.1 para evitar que GitHub Pages/Chrome usen JS viejo.
+- Si el navegador bloquea el popup, ahora la página muestra el motivo.
 
 REEMPLAZAR EN GITHUB:
-- index.html
-- app.js
-- styles.css
-- storage.js
-
-NO CAMBIAR:
-- firebase.js
-- core.js
+1. index.html
+2. app.js
+3. storage.js
+4. styles.css
+5. firebase.js
 
 FIREBASE:
-- Firestore Database > Reglas
-- Reemplazar todo por firestore.rules
-- Pulsar Publicar
+- firestore.rules NO cambia respecto a la versión de colores.
+- Si ya publicaste esas reglas, no necesitas volver a cambiarlas.
+- Si no, publica firestore.rules.
 
-COLORES:
-- Iván: rojo suave
-- Mónica: verde turquesa
-- Jorge: azul
-- Aurora: violeta
-- Karina: ámbar
-- Usuarios nuevos: color automático estable según su correo.
-
-AUDITORÍA:
-- Se conserva quién creó la reservación.
-- Si otra persona la edita, se guarda también quién hizo la última edición.
-- El color representa al último usuario que creó o editó la reservación.
-- Excel agrega la columna "Última edición por".
-
-FUENTE:
-- Segoe UI Variable / Aptos / Segoe UI, con alternativas del sistema.
+DESPUÉS:
+- Esperar 1-2 minutos tras los commits.
+- Abrir la página.
+- Ctrl+F5 una vez.
+- Pulsar "Iniciar sesión con Google".

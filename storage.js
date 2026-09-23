@@ -1,5 +1,5 @@
 import { INITIAL_ROOMS, minutes, parseDate, dateKey, validateBooking } from './core.js';
-import { db, OWNER_EMAIL, INITIAL_AUTHORIZED_USERS } from './firebase.js';
+import { db, OWNER_EMAIL, INITIAL_AUTHORIZED_USERS } from './firebase.js?v=4.1';
 import {
   collection,
   deleteDoc,

@@ -2,10 +2,10 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 
 import {
   browserLocalPersistence,
-  getAuth,
+  browserPopupRedirectResolver,
   GoogleAuthProvider,
+  initializeAuth,
   onAuthStateChanged,
-  setPersistence,
   signInWithPopup,
   signOut
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
@@ -29,42 +29,27 @@ export const OWNER_EMAIL = 'ivan.gutierrez@uteq.edu.mx';
 
 
 export const INITIAL_AUTHORIZED_USERS = [
-  {
-    name: 'Iván Gutiérrez Bautista',
-    email: 'ivan.gutierrez@uteq.edu.mx'
-  },
-  {
-    name: 'Mónica Arellano Medina',
-    email: 'monica.arellano@uteq.edu.mx'
-  },
-  {
-    name: 'M.G.P. Jorge Cervantes Acosta',
-    email: 'jorge.cervantes@uteq.edu.mx'
-  },
-  {
-    name: 'Ma. Aurora Osornio Dominguez',
-    email: 'aurora.osornio@uteq.edu.mx'
-  },
-  {
-    name: 'Laura Karina Garcia Rodriguez',
-    email: 'karina.garcia@uteq.edu.mx'
-  }
+  { name: 'Iván Gutiérrez Bautista', email: 'ivan.gutierrez@uteq.edu.mx' },
+  { name: 'Mónica Arellano Medina', email: 'monica.arellano@uteq.edu.mx' },
+  { name: 'M.G.P. Jorge Cervantes Acosta', email: 'jorge.cervantes@uteq.edu.mx' },
+  { name: 'Ma. Aurora Osornio Dominguez', email: 'aurora.osornio@uteq.edu.mx' },
+  { name: 'Laura Karina Garcia Rodriguez', email: 'karina.garcia@uteq.edu.mx' }
 ];
 
 
 const app = initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+/*
+  Se inicializa Authentication directamente con persistencia local.
+  Esto evita retrasar signInWithPopup() con un await previo, lo cual en
+  algunos navegadores puede hacer que la ventana emergente no se abra.
+*/
+export const auth = initializeAuth(app, {
+  persistence: browserLocalPersistence,
+  popupRedirectResolver: browserPopupRedirectResolver
+});
 
-// Mantiene la sesión en este navegador incluso al cerrar pestañas o reiniciar
-// el navegador. Solo se pedirá iniciar sesión otra vez si el usuario pulsa
-// "Salir", se revoca la cuenta/sesión, Firebase lo exige o se borran los datos
-// del navegador.
-const persistenceReady = setPersistence(auth, browserLocalPersistence)
-  .catch(error => {
-    console.warn('No se pudo fijar la persistencia local de Firebase Auth.', error);
-  });
+export const db = getFirestore(app);
 
 
 const provider = new GoogleAuthProvider();
@@ -79,12 +64,13 @@ export const authService = {
     return onAuthStateChanged(auth, callback);
   },
 
-  async signIn() {
-    await persistenceReady;
+  signIn() {
+    // Se ejecuta inmediatamente desde el clic del usuario para evitar
+    // que el navegador bloquee la ventana emergente.
     return signInWithPopup(auth, provider);
   },
 
-  async signOut() {
+  signOut() {
     return signOut(auth);
   },
 
@@ -94,9 +80,7 @@ export const authService = {
 
   username(user) {
     const email = String(user?.email || '');
-    return email.includes('@')
-      ? email.split('@')[0]
-      : email;
+    return email.includes('@') ? email.split('@')[0] : email;
   }
 
 };
