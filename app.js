@@ -620,7 +620,7 @@ function excelRows(bookings) {
       'Grupo': b.group,
       'Actividad': b.activity,
       'Registrado por': b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : ''),
-      'Última edición por': b.updatedByLabel || (b.updatedByEmail ? b.updatedByEmail.split('@')[0] : (b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : ''))
+      'Última edición por': b.updatedByLabel || (b.updatedByEmail ? b.updatedByEmail.split('@')[0] : (b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : '')))
     };
   });
 }
