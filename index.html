@@ -1,32 +1,272 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#123d42"><meta name="description" content="Agenda semanal de reservaciones de salas audiovisuales.">
-  <title>Salas audiovisuales · Agenda</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123d42">
+  <meta name="description" content="Agenda semanal de reservación de salas audiovisuales de la División Industrial.">
+  <title>Reservación de Salas Audiovisuales · División Industrial</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css"><script type="module" src="app.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <script type="module" src="app.js"></script>
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">▦</span><span>ESPACIOS ACADÉMICOS<small>Salas audiovisuales</small></span></a><button id="manage" class="quiet">Administrar salas</button></header>
+  <header class="topbar">
+    <a class="brand" href="./">
+      <span class="brand-icon" aria-hidden="true">▦</span>
+      <span>
+        ESPACIOS ACADÉMICOS
+        <small>Reservación de Salas Audiovisuales</small>
+        <em>División Industrial</em>
+      </span>
+    </a>
+    <button id="manage" class="quiet">Administración</button>
+  </header>
+
   <main>
-    <section class="intro"><div><p class="eyebrow">AGENDA DE RESERVACIONES</p><h1>Un espacio para cada actividad.</h1><p class="subtitle">Consulta la disponibilidad y reserva tu sala.</p></div><button id="new" class="primary">＋ Nueva reservación</button></section>
+    <section class="intro">
+      <div>
+        <p class="eyebrow">AGENDA DE RESERVACIONES</p>
+        <h1>Un espacio para cada actividad.</h1>
+        <p class="subtitle">Consulta la disponibilidad y reserva tu sala.</p>
+      </div>
+      <button id="new" class="primary">＋ Nueva reservación</button>
+    </section>
+
     <section class="workspace" aria-label="Calendario de salas">
-      <div class="room-bar"><div id="room-tabs" class="room-tabs" role="group" aria-label="Filtrar por sala"></div><span class="legend"><i></i>Disponible <i class="busy"></i>Ocupado</span></div>
-      <div class="calendar-toolbar"><div><h2 id="period"></h2><p id="summary"></p></div><div class="navigation"><button id="previous" aria-label="Semana anterior">←</button><button id="today">Hoy</button><button id="next" aria-label="Semana siguiente">→</button></div></div>
+      <div class="room-bar">
+        <div id="room-tabs" class="room-tabs" role="group" aria-label="Filtrar por sala"></div>
+        <span class="legend"><i></i>Disponible <i class="busy"></i>Ocupado</span>
+      </div>
+
+      <div class="calendar-toolbar">
+        <div>
+          <h2 id="period"></h2>
+          <p id="summary"></p>
+        </div>
+        <div class="navigation">
+          <button id="previous" aria-label="Semana anterior">←</button>
+          <button id="today">Hoy</button>
+          <button id="next" aria-label="Semana siguiente">→</button>
+        </div>
+      </div>
+
       <div id="day-picker" class="day-picker" role="group" aria-label="Seleccionar día"></div>
       <div id="calendar" class="calendar"></div>
-      <div class="calendar-footer"><span>Selecciona un horario libre para reservar.</span><span>Lunes a sábado · 07:00–22:00</span></div>
+
+      <div class="calendar-footer">
+        <span>Selecciona un horario libre para reservar.</span>
+        <span>Lunes a sábado · 07:00–22:00</span>
+      </div>
     </section>
-    <footer class="page-footer"><span>Salas audiovisuales</span><span>Datos guardados en este navegador · Sin sincronización entre equipos</span></footer>
+
+    <footer class="page-footer">
+      <span>Reservación de Salas Audiovisuales · División Industrial</span>
+      <span>Sitio elaborado por Iván Gutiérrez Bautista · Jefe de Unidad de Coordinación Académica · División Industrial · Turno Matutino</span>
+    </footer>
+
     <p id="notice" role="status" aria-live="polite"></p>
   </main>
-  <dialog id="booking-dialog" aria-labelledby="booking-title"><form id="booking-form"><div class="dialog-heading"><div><p class="eyebrow">RESERVACIÓN</p><h2 id="booking-title">Nueva reservación</h2></div><button type="button" class="close" data-close aria-label="Cerrar">×</button></div>
-    <input type="hidden" name="id"><label>Sala<select name="roomId" required></select></label><label>Fecha<input type="date" name="date" required></label>
-    <div class="form-row"><label>Hora inicial<select name="start" required></select></label><label>Hora final<select name="end" required></select></label></div>
-    <label>Nombre del maestro<input name="teacher" required autocomplete="name"></label><label>Grupo<input name="group" required placeholder="Ej. IDGS-43"></label><label>Actividad<textarea name="activity" required rows="2" placeholder="¿Qué actividad se realizará?"></textarea></label>
-    <p class="form-error" id="booking-error" role="alert"></p><div class="actions"><button type="button" data-close>Cancelar</button><button class="primary" type="submit">Guardar reservación</button></div></form></dialog>
-  <dialog id="detail-dialog" aria-labelledby="detail-title"><div class="dialog-heading"><div><p class="eyebrow">DETALLE DE RESERVACIÓN</p><h2 id="detail-title"></h2></div><button class="close" data-close aria-label="Cerrar">×</button></div><div id="details"></div><div class="actions"><button id="delete-booking" class="danger">Eliminar</button><button data-close>Cerrar</button><button id="edit-booking" class="primary">Editar</button></div></dialog>
-  <dialog id="rooms-dialog" aria-labelledby="rooms-title"><div class="dialog-heading"><div><p class="eyebrow">ADMINISTRACIÓN</p><h2 id="rooms-title">Salas</h2></div><button class="close" data-close aria-label="Cerrar">×</button></div><div id="rooms-list"></div><form id="room-form"><label>Nueva sala<input name="name" required placeholder="Nombre de la sala"></label><button class="primary">Agregar sala</button></form><p class="form-error" id="room-error" role="alert"></p></dialog>
-  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><h2 id="confirm-title"></h2><p id="confirm-text"></p><div class="actions"><button id="cancel-delete">Cancelar</button><button id="confirm-delete" class="danger solid">Eliminar</button></div><p id="confirm-error" class="form-error" role="alert"></p></dialog>
-</body></html>
+
+  <dialog id="booking-dialog" aria-labelledby="booking-title">
+    <form id="booking-form">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">RESERVACIÓN</p>
+          <h2 id="booking-title">Nueva reservación</h2>
+        </div>
+        <button type="button" class="close" data-close aria-label="Cerrar">×</button>
+      </div>
+
+      <input type="hidden" name="id">
+
+      <label>
+        Sala
+        <select name="roomId" required></select>
+      </label>
+
+      <label>
+        Fecha
+        <input type="date" name="date" required>
+      </label>
+
+      <div class="form-row">
+        <label>
+          Hora inicial
+          <select name="start" required></select>
+        </label>
+        <label>
+          Hora final
+          <select name="end" required></select>
+        </label>
+      </div>
+
+      <label>
+        Nombre del maestro
+        <input name="teacher" required autocomplete="name">
+      </label>
+
+      <label>
+        Grupo
+        <input name="group" required placeholder="Ej. IDGS-43">
+      </label>
+
+      <label>
+        Actividad
+        <textarea name="activity" required rows="2" placeholder="¿Qué actividad se realizará?"></textarea>
+      </label>
+
+      <section id="repeat-section" class="repeat-box" aria-label="Repetición de reservación">
+        <label class="check-line">
+          <input type="checkbox" name="repeatEnabled" id="repeat-enabled">
+          <span>Repetir esta reservación en otros días</span>
+        </label>
+
+        <div id="repeat-options" class="repeat-options" hidden>
+          <p>Selecciona los días que también deseas reservar con el mismo horario y datos.</p>
+          <div class="weekday-grid" role="group" aria-label="Días de repetición">
+            <label><input type="checkbox" name="repeatWeekdays" value="1"> Lun</label>
+            <label><input type="checkbox" name="repeatWeekdays" value="2"> Mar</label>
+            <label><input type="checkbox" name="repeatWeekdays" value="3"> Mié</label>
+            <label><input type="checkbox" name="repeatWeekdays" value="4"> Jue</label>
+            <label><input type="checkbox" name="repeatWeekdays" value="5"> Vie</label>
+            <label><input type="checkbox" name="repeatWeekdays" value="6"> Sáb</label>
+          </div>
+          <label>
+            Repetir hasta
+            <input type="date" name="repeatUntil">
+          </label>
+          <small>La fecha principal siempre se conserva. Si alguna repetición se empalma, no se guardará ninguna hasta corregir el conflicto.</small>
+        </div>
+      </section>
+
+      <p class="form-error" id="booking-error" role="alert"></p>
+      <div class="actions">
+        <button type="button" data-close>Cancelar</button>
+        <button class="primary" type="submit">Guardar reservación</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="detail-dialog" aria-labelledby="detail-title">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">DETALLE DE RESERVACIÓN</p>
+        <h2 id="detail-title"></h2>
+      </div>
+      <button class="close" data-close aria-label="Cerrar">×</button>
+    </div>
+    <div id="details"></div>
+    <div class="actions">
+      <button id="delete-booking" class="danger">Eliminar</button>
+      <button data-close>Cerrar</button>
+      <button id="edit-booking" class="primary">Editar</button>
+    </div>
+  </dialog>
+
+  <dialog id="rooms-dialog" class="admin-dialog" aria-labelledby="rooms-title">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">ADMINISTRACIÓN</p>
+        <h2 id="rooms-title">Salas y reportes</h2>
+      </div>
+      <button class="close" data-close aria-label="Cerrar">×</button>
+    </div>
+
+    <section class="admin-section">
+      <div class="section-heading">
+        <div>
+          <h3>Salas</h3>
+          <p>Administra el nombre y la abreviatura que aparece bajo cada fecha.</p>
+        </div>
+      </div>
+
+      <div id="rooms-list"></div>
+
+      <form id="room-form" class="new-room-form">
+        <div class="form-row room-fields">
+          <label>
+            Nueva sala
+            <input name="name" required placeholder="Ej. Audiovisual Edificio G">
+          </label>
+          <label>
+            Abreviatura
+            <input name="short" required maxlength="12" placeholder="Ej. SA G">
+          </label>
+        </div>
+        <button class="primary">Agregar sala</button>
+      </form>
+      <p class="form-error" id="room-error" role="alert"></p>
+    </section>
+
+    <section class="admin-section report-section">
+      <div class="section-heading">
+        <div>
+          <h3>Reporte de reservaciones</h3>
+          <p>Descarga un archivo de Excel por mes, año o periodo personalizado.</p>
+        </div>
+      </div>
+
+      <form id="report-form">
+        <div class="form-row report-main-row">
+          <label>
+            Tipo de periodo
+            <select name="periodType" id="report-period-type">
+              <option value="monthly">Mensual</option>
+              <option value="annual">Anual</option>
+              <option value="custom">Periodo personalizado</option>
+            </select>
+          </label>
+
+          <label id="report-month-field">
+            Mes
+            <input type="month" name="month" id="report-month">
+          </label>
+
+          <label id="report-year-field" hidden>
+            Año
+            <input type="number" name="year" id="report-year" min="2020" max="2100" step="1">
+          </label>
+        </div>
+
+        <div id="report-custom-fields" class="form-row" hidden>
+          <label>
+            Desde
+            <input type="date" name="from" id="report-from">
+          </label>
+          <label>
+            Hasta
+            <input type="date" name="to" id="report-to">
+          </label>
+        </div>
+
+        <fieldset class="report-rooms">
+          <legend>Salas incluidas</legend>
+          <label class="check-line all-room-option">
+            <input type="checkbox" id="report-all-rooms" checked>
+            <span>Todas las salas</span>
+          </label>
+          <div id="report-room-options" class="report-room-options"></div>
+        </fieldset>
+
+        <div class="report-actions">
+          <p id="report-preview" class="report-preview"></p>
+          <button type="submit" class="primary">↓ Descargar Excel</button>
+        </div>
+        <p class="form-error" id="report-error" role="alert"></p>
+      </form>
+    </section>
+  </dialog>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-text"></p>
+    <div class="actions">
+      <button id="cancel-delete">Cancelar</button>
+      <button id="confirm-delete" class="danger solid">Eliminar</button>
+    </div>
+    <p id="confirm-error" class="form-error" role="alert"></p>
+  </dialog>
+</body>
+</html>
