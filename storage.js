@@ -231,6 +231,8 @@ export const repository = {
         seriesId: booking.seriesId || previous?.seriesId || '',
         createdByEmail: previous?.createdByEmail || actor,
         createdByLabel: previous?.createdByLabel || actor.split('@')[0],
+        updatedByEmail: actor,
+        updatedByLabel: actor.split('@')[0],
         createdAt: previous?.createdAt || serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -299,6 +301,8 @@ export const repository = {
           seriesId,
           createdByEmail: actor,
           createdByLabel: actor.split('@')[0],
+          updatedByEmail: actor,
+          updatedByLabel: actor.split('@')[0],
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });

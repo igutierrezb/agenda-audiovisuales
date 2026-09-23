@@ -22,6 +22,108 @@ const fullDate = date => date.toLocaleDateString('es-MX', {
   year: 'numeric'
 });
 
+const USER_PALETTES = {
+  'ivan.gutierrez@uteq.edu.mx': {
+    bg: '#f4d9d5',
+    hover: '#edc5bf',
+    border: '#c87369',
+    accent: '#b65f55',
+    ink: '#6d3731'
+  },
+  'monica.arellano@uteq.edu.mx': {
+    bg: '#d7eee9',
+    hover: '#c4e5de',
+    border: '#58a092',
+    accent: '#338678',
+    ink: '#245a51'
+  },
+  'jorge.cervantes@uteq.edu.mx': {
+    bg: '#dce8f6',
+    hover: '#c8daf0',
+    border: '#6a94c3',
+    accent: '#4c7fb7',
+    ink: '#2e527a'
+  },
+  'aurora.osornio@uteq.edu.mx': {
+    bg: '#e9e0f2',
+    hover: '#dcd0eb',
+    border: '#9476b4',
+    accent: '#7d5ba4',
+    ink: '#563e72'
+  },
+  'karina.garcia@uteq.edu.mx': {
+    bg: '#f4e5c2',
+    hover: '#eed79f',
+    border: '#c3933f',
+    accent: '#a97928',
+    ink: '#6b511f'
+  }
+};
+
+function userPalette(email) {
+  email = String(email || '').trim().toLowerCase();
+  if (USER_PALETTES[email]) return USER_PALETTES[email];
+
+  let hash = 0;
+  for (const char of email) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  const hue = Math.abs(hash) % 360;
+
+  return {
+    bg: `hsl(${hue} 48% 88%)`,
+    hover: `hsl(${hue} 48% 82%)`,
+    border: `hsl(${hue} 40% 53%)`,
+    accent: `hsl(${hue} 46% 43%)`,
+    ink: `hsl(${hue} 42% 28%)`
+  };
+}
+
+function bookingActor(booking) {
+  const createdEmail = String(booking?.createdByEmail || '').toLowerCase();
+  const updatedEmail = String(booking?.updatedByEmail || createdEmail).toLowerCase();
+
+  const createdLabel = booking?.createdByLabel
+    || (createdEmail.includes('@') ? createdEmail.split('@')[0] : '');
+
+  const updatedLabel = booking?.updatedByLabel
+    || (updatedEmail.includes('@') ? updatedEmail.split('@')[0] : createdLabel);
+
+  return {
+    createdEmail,
+    updatedEmail,
+    createdLabel,
+    updatedLabel,
+    editedByAnother: Boolean(updatedEmail && createdEmail && updatedEmail !== createdEmail)
+  };
+}
+
+function bookingColorStyle(booking) {
+  const actor = bookingActor(booking);
+  const palette = userPalette(actor.updatedEmail || actor.createdEmail);
+
+  return [
+    `--booking-bg:${palette.bg}`,
+    `--booking-hover:${palette.hover}`,
+    `--booking-border:${palette.border}`,
+    `--booking-accent:${palette.accent}`,
+    `--booking-ink:${palette.ink}`
+  ].join(';');
+}
+
+function bookingAuditHtml(booking) {
+  const actor = bookingActor(booking);
+  if (!actor.createdLabel && !actor.updatedLabel) return '';
+
+  const created = actor.createdLabel
+    ? `<small class="booked-by"><span class="user-dot"></span>por ${escape(actor.createdLabel)}</small>`
+    : '';
+
+  const edited = actor.editedByAnother
+    ? `<small class="edited-by">editó ${escape(actor.updatedLabel)}</small>`
+    : '';
+
+  return `${created}${edited}`;
+}
+
 function defaultRoomShort(room) {
   const existing = String(room?.short || '').trim();
   if (existing) return existing.toUpperCase();
@@ -176,7 +278,7 @@ function render() {
                 .map(b => `
                   <button
                     class="booking"
-                    style="top:${(minutes(b.start) - 420) / 30 * SLOT_HEIGHT + 2}px;height:${Math.max((minutes(b.end) - minutes(b.start)) / 30 * SLOT_HEIGHT - 4, 28)}px"
+                    style="top:${(minutes(b.start) - 420) / 30 * SLOT_HEIGHT + 2}px;height:${Math.max((minutes(b.end) - minutes(b.start)) / 30 * SLOT_HEIGHT - 4, 28)}px;${bookingColorStyle(b)}"
                     data-booking="${escape(b.id)}"
                     aria-label="${escape(`${b.teacher}, ${b.group}, ${b.activity}, ${b.start} a ${b.end}, ${r.name}`)}"
                     title="${escape(`${r.name}\n${b.teacher} · ${b.group}\n${b.activity}\n${b.start}–${b.end}`)}">
@@ -187,7 +289,7 @@ function render() {
                     ${selectedRoom === 'all' && minutes(b.end) - minutes(b.start) > 30
                       ? `<small>${escape(defaultRoomShort(r))}</small>`
                       : ''}
-                    ${b.createdByLabel ? `<small class="booked-by">por ${escape(b.createdByLabel)}</small>` : ''}
+                    ${bookingAuditHtml(b)}
                   </button>
                 `).join('')}
             </div>
@@ -294,7 +396,8 @@ function details(id) {
     ['Actividad', b.activity],
     ['Fecha', fullDate(parseDate(b.date))],
     ['Horario', `${b.start}–${b.end}`],
-    ['Apartado por', b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : '—')]
+    ['Apartado por', b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : '—')],
+    ['Última edición por', b.updatedByLabel || (b.updatedByEmail ? b.updatedByEmail.split('@')[0] : (b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : '—')))]
   ].map(([label, value]) => `
     <div class="detail-row">
       <span>${escape(label)}</span>
@@ -516,13 +619,14 @@ function excelRows(bookings) {
       'Maestro': b.teacher,
       'Grupo': b.group,
       'Actividad': b.activity,
-      'Registrado por': b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : '')
+      'Registrado por': b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : ''),
+      'Última edición por': b.updatedByLabel || (b.updatedByEmail ? b.updatedByEmail.split('@')[0] : (b.createdByLabel || (b.createdByEmail ? b.createdByEmail.split('@')[0] : ''))
     };
   });
 }
 
 function downloadCsv(rows, fileName) {
-  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad', 'Registrado por'];
+  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad', 'Registrado por', 'Última edición por'];
   const quote = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const csv = '\uFEFF' + [
     headers.map(quote).join(','),
@@ -555,14 +659,14 @@ function exportReport() {
     return;
   }
 
-  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad', 'Registrado por'];
+  const headers = ['Fecha', 'Día', 'Sala', 'Abreviatura', 'Hora inicial', 'Hora final', 'Duración (min)', 'Maestro', 'Grupo', 'Actividad', 'Registrado por', 'Última edición por'];
   const dataSheet = rows.length
     ? window.XLSX.utils.json_to_sheet(rows, { header: headers })
     : window.XLSX.utils.aoa_to_sheet([headers]);
 
   dataSheet['!cols'] = [
     { wch: 12 }, { wch: 12 }, { wch: 34 }, { wch: 13 }, { wch: 13 },
-    { wch: 13 }, { wch: 15 }, { wch: 30 }, { wch: 16 }, { wch: 44 }, { wch: 22 }
+    { wch: 13 }, { wch: 15 }, { wch: 30 }, { wch: 16 }, { wch: 44 }, { wch: 22 }, { wch: 22 }
   ];
 
   const summarySheet = window.XLSX.utils.aoa_to_sheet([

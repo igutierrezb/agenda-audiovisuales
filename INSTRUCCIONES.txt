@@ -1,26 +1,33 @@
-ARCHIVOS FINALES - AGENDA AUDIOVISUALES DIN
+VERSIÓN V3 - COLORES POR USUARIO + TIPOGRAFÍA MÁS LIMPIA
 
 REEMPLAZAR EN GITHUB:
-1. index.html
-2. app.js
-3. firebase.js
+- index.html
+- app.js
+- styles.css
+- storage.js
 
 NO CAMBIAR:
-- storage.js
+- firebase.js
 - core.js
-- styles.css
 
 FIREBASE:
-1. Firebase Console > Firestore Database > Reglas
-2. Reemplazar todo por el contenido de firestore.rules
-3. Pulsar PUBLICAR
+- Firestore Database > Reglas
+- Reemplazar todo por firestore.rules
+- Pulsar Publicar
 
-PERMISOS:
-- Iván (ivan.gutierrez@uteq.edu.mx): administra salas, usuarios, reservaciones y reportes.
-- Otros usuarios autorizados: consultar agenda, crear, editar y eliminar reservaciones, y descargar reportes.
-- Solo Iván puede agregar/quitar usuarios y crear/editar/eliminar salas.
+COLORES:
+- Iván: rojo suave
+- Mónica: verde turquesa
+- Jorge: azul
+- Aurora: violeta
+- Karina: ámbar
+- Usuarios nuevos: color automático estable según su correo.
 
-SESIÓN:
-- Se usa browserLocalPersistence.
-- La sesión permanece abierta entre pestañas y reinicios del navegador.
-- Solo debe solicitarse de nuevo si se pulsa Salir, se revoca/expira la sesión de forma obligatoria o se borran los datos del navegador.
+AUDITORÍA:
+- Se conserva quién creó la reservación.
+- Si otra persona la edita, se guarda también quién hizo la última edición.
+- El color representa al último usuario que creó o editó la reservación.
+- Excel agrega la columna "Última edición por".
+
+FUENTE:
+- Segoe UI Variable / Aptos / Segoe UI, con alternativas del sistema.
