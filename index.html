@@ -7,11 +7,39 @@
   <meta name="description" content="Agenda semanal de reservación de salas audiovisuales de la División Industrial.">
   <title>Reservación de Salas Audiovisuales · División Industrial</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=5.2">
+  <link rel="stylesheet" href="styles.css?v=7.0">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script type="module" src="app.js?v=5.2"></script>
+  <script type="module" src="app.js?v=7.0"></script>
 </head>
+
 <body class="auth-pending">
+  <a class="skip-link" href="#calendar">Saltar al calendario</a>
+  <div id="fatal-banner" class="fatal-banner" role="alert" hidden></div>
+  <script>
+    (() => {
+      const showFatal = message => {
+        const render = () => {
+          const banner = document.getElementById('fatal-banner');
+          if (!banner) return;
+          banner.textContent = 'La aplicación encontró un problema: ' + message + '. Recarga la página; si continúa, conserva una captura del mensaje.';
+          banner.hidden = false;
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', render, { once: true });
+        } else {
+          render();
+        }
+      };
+      window.addEventListener('error', event => {
+        if (event && event.message) showFatal(event.message);
+      });
+      window.addEventListener('unhandledrejection', event => {
+        const value = event && event.reason;
+        showFatal((value && value.message) || String(value || 'error inesperado'));
+      });
+    })();
+  </script>
+
   <section id="auth-screen" class="auth-screen" aria-live="polite">
     <div class="auth-card">
       <span class="auth-icon" aria-hidden="true">▦</span>
@@ -34,8 +62,12 @@
         <em>División Industrial</em>
       </span>
     </a>
+
     <div class="top-actions">
-      <span id="sync-status" class="sync-status" title="Estado de sincronización">● Sincronizando</span>
+      <span class="sync-cluster">
+        <span id="sync-status" class="sync-status" title="Estado de sincronización">● Sincronizando</span>
+        <small id="last-sync" class="last-sync">Esperando datos…</small>
+      </span>
       <span id="user-chip" class="user-chip"></span>
       <button id="manage" class="quiet">Administración</button>
       <button id="sign-out" class="quiet">Salir</button>
@@ -70,10 +102,15 @@
           <button type="button" data-view="week" aria-pressed="true">Esta semana</button>
         </div>
 
+        <label class="date-jump">
+          <span>Ir a fecha</span>
+          <input id="jump-date" type="date" aria-label="Ir a una fecha">
+        </label>
+
         <div class="navigation">
-          <button id="previous" aria-label="Semana anterior">←</button>
-          <button id="today">Hoy</button>
-          <button id="next" aria-label="Semana siguiente">→</button>
+          <button id="previous" aria-label="Semana anterior" title="Semana anterior">←</button>
+          <button id="today" title="Ir al día de hoy">Hoy</button>
+          <button id="next" aria-label="Semana siguiente" title="Semana siguiente">→</button>
         </div>
       </div>
 
@@ -81,19 +118,24 @@
       <div id="calendar" class="calendar"></div>
 
       <div class="calendar-footer">
-        <span id="availability-status" class="availability-status" aria-live="polite">Haz clic o arrastra un horario para reservar. También puedes arrastrar una reservación para moverla de sala, día u horario.</span>
-        <span>Lunes a sábado · 07:00–22:00</span>
+        <span id="availability-status" class="availability-status" aria-live="polite">
+          Haz clic o arrastra un horario para reservar. También puedes arrastrar una reservación para moverla de sala, día u horario.
+        </span>
+        <span id="schedule-label">Lunes a sábado · 07:00–22:00</span>
       </div>
     </section>
 
     <footer class="page-footer">
       <span>Reservación de Salas Audiovisuales · División Industrial</span>
       <span>Sitio elaborado por Iván Gutiérrez Bautista · Jefe de Unidad de Coordinación Académica · División Industrial · Turno Matutino</span>
+      <span id="app-version" class="app-version"></span>
     </footer>
 
     <p id="notice" role="status" aria-live="polite"></p>
   </main>
 
+
+  <!-- RESERVACIÓN -->
   <dialog id="booking-dialog" aria-labelledby="booking-title">
     <form id="booking-form">
       <div class="dialog-heading">
@@ -129,17 +171,17 @@
 
       <label>
         Nombre del maestro
-        <input name="teacher" required autocomplete="name">
+        <input name="teacher" required maxlength="160" autocomplete="name">
       </label>
 
       <label>
         Grupo
-        <input name="group" required placeholder="Ej. IDGS-43">
+        <input name="group" required maxlength="80" placeholder="Ej. IDGS-43">
       </label>
 
       <label>
         Actividad
-        <textarea name="activity" required rows="2" placeholder="¿Qué actividad se realizará?"></textarea>
+        <textarea name="activity" required maxlength="500" rows="2" placeholder="¿Qué actividad se realizará?"></textarea>
       </label>
 
       <section class="color-picker-box" aria-labelledby="booking-color-title">
@@ -162,30 +204,26 @@
 
         <div id="repeat-options" class="repeat-options" hidden>
           <p>Selecciona los días que también deseas reservar con el mismo horario y datos.</p>
-          <div class="weekday-grid" role="group" aria-label="Días de repetición">
-            <label><input type="checkbox" name="repeatWeekdays" value="1"> Lun</label>
-            <label><input type="checkbox" name="repeatWeekdays" value="2"> Mar</label>
-            <label><input type="checkbox" name="repeatWeekdays" value="3"> Mié</label>
-            <label><input type="checkbox" name="repeatWeekdays" value="4"> Jue</label>
-            <label><input type="checkbox" name="repeatWeekdays" value="5"> Vie</label>
-            <label><input type="checkbox" name="repeatWeekdays" value="6"> Sáb</label>
-          </div>
+          <div id="weekday-grid" class="weekday-grid" role="group" aria-label="Días de repetición"></div>
           <label>
             Repetir hasta
             <input type="date" name="repeatUntil">
           </label>
-          <small>La fecha principal siempre se conserva. Si alguna repetición se empalma, no se guardará ninguna hasta corregir el conflicto.</small>
+          <small>Si alguna repetición se empalma, no se guardará ninguna hasta corregir el conflicto.</small>
         </div>
       </section>
 
       <p class="form-error" id="booking-error" role="alert"></p>
+
       <div class="actions">
         <button type="button" data-close>Cancelar</button>
-        <button class="primary" type="submit">Guardar reservación</button>
+        <button class="primary" type="submit" data-mutation>Guardar reservación</button>
       </div>
     </form>
   </dialog>
 
+
+  <!-- DETALLE -->
   <dialog id="detail-dialog" aria-labelledby="detail-title">
     <div class="dialog-heading">
       <div>
@@ -194,82 +232,207 @@
       </div>
       <button class="close" data-close aria-label="Cerrar">×</button>
     </div>
+
     <div id="details"></div>
+
     <div class="actions">
-      <button id="delete-booking" class="danger">Eliminar</button>
-      <button id="delete-series" class="danger" hidden>Eliminar serie</button>
+      <button id="cancel-booking" class="danger" data-mutation>Cancelar reservación</button>
+      <button id="cancel-series" class="danger" hidden data-mutation>Cancelar serie</button>
+      <button id="restore-booking" class="primary" hidden data-mutation>Restaurar</button>
       <button data-close>Cerrar</button>
       <button id="duplicate-booking">Duplicar</button>
-      <button id="edit-booking" class="primary">Editar</button>
+      <button id="edit-booking" class="primary" data-mutation>Editar</button>
     </div>
   </dialog>
 
-  <dialog id="rooms-dialog" class="admin-dialog" aria-labelledby="rooms-title">
+
+  <!-- ADMINISTRACIÓN / REPORTES -->
+  <dialog id="admin-dialog" class="admin-dialog admin-v6" aria-labelledby="admin-title">
     <div class="dialog-heading">
       <div>
         <p class="eyebrow">ADMINISTRACIÓN</p>
-        <h2 id="rooms-title">Salas, usuarios y reportes</h2>
+        <h2 id="admin-title">Panel de administración</h2>
       </div>
       <button class="close" data-close aria-label="Cerrar">×</button>
     </div>
 
-    <section id="rooms-admin-section" class="admin-section">
+    <nav id="admin-tabs" class="admin-tabs" aria-label="Secciones de administración">
+      <button type="button" data-admin-tab="summary">Resumen</button>
+      <button type="button" data-admin-tab="reservations">Reservaciones</button>
+      <button type="button" data-admin-tab="rooms">Salas</button>
+      <button type="button" data-admin-tab="users">Usuarios</button>
+      <button type="button" data-admin-tab="report">Reportes</button>
+      <button type="button" data-admin-tab="audit">Historial</button>
+      <button type="button" data-admin-tab="settings">Configuración</button>
+    </nav>
+
+    <!-- RESUMEN -->
+    <section id="panel-summary" class="admin-panel" data-admin-panel="summary">
       <div class="section-heading">
         <div>
-          <h3>Salas</h3>
-          <p>Administra el nombre y la abreviatura que aparece bajo cada fecha.</p>
+          <h3>Resumen operativo</h3>
+          <p>Indicadores del periodo actual sin modificar información de Firestore.</p>
         </div>
       </div>
 
-      <div id="rooms-list"></div>
+      <div id="summary-cards" class="summary-cards"></div>
 
-      <form id="room-form" class="new-room-form">
-        <div class="form-row room-fields">
-          <label>
-            Nueva sala
-            <input name="name" required placeholder="Ej. Audiovisual Edificio G">
-          </label>
-          <label>
-            Abreviatura
-            <input name="short" required maxlength="12" placeholder="Ej. SA G">
-          </label>
-        </div>
-        <button class="primary">Agregar sala</button>
-      </form>
-      <p class="form-error" id="room-error" role="alert"></p>
+      <div class="admin-grid-2">
+        <article class="admin-card">
+          <h4>Próximas reservaciones de hoy</h4>
+          <div id="summary-upcoming" class="compact-list"></div>
+        </article>
+
+        <article class="admin-card">
+          <h4>Utilización mensual por sala</h4>
+          <div id="summary-room-usage" class="compact-list"></div>
+        </article>
+      </div>
     </section>
 
-    <section id="users-admin-section" class="admin-section" hidden>
+    <!-- RESERVACIONES -->
+    <section id="panel-reservations" class="admin-panel" data-admin-panel="reservations" hidden>
+      <div class="section-heading">
+        <div>
+          <h3>Reservaciones</h3>
+          <p>Consulta activas, pasadas y canceladas sin descargar todo el historial.</p>
+        </div>
+      </div>
+
+      <div class="admin-filters">
+        <label>Desde<input type="date" id="admin-res-from"></label>
+        <label>Hasta<input type="date" id="admin-res-to"></label>
+        <label>Sala<select id="admin-res-room"></select></label>
+        <label>
+          Estado
+          <select id="admin-res-status">
+            <option value="active">Activas</option>
+            <option value="cancelled">Canceladas</option>
+            <option value="past">Pasadas</option>
+            <option value="all">Todas</option>
+          </select>
+        </label>
+        <label class="admin-search">Buscar<input id="admin-res-search" placeholder="Maestro, grupo o actividad"></label>
+        <button type="button" id="admin-res-load">Consultar</button>
+      </div>
+
+      <p id="admin-res-count" class="admin-result-count"></p>
+      <div id="admin-res-list" class="reservation-admin-list"></div>
+    </section>
+
+    <!-- SALAS -->
+    <section id="panel-rooms" class="admin-panel" data-admin-panel="rooms" hidden>
+      <div class="section-heading">
+        <div>
+          <h3>Salas</h3>
+          <p>Las salas se archivan; sus reservaciones históricas nunca se eliminan.</p>
+        </div>
+      </div>
+
+      <div class="admin-grid-2">
+        <article class="admin-card">
+          <h4>Salas activas</h4>
+          <div id="rooms-active-list" class="compact-list"></div>
+        </article>
+
+        <article class="admin-card">
+          <h4>Salas archivadas</h4>
+          <div id="rooms-archived-list" class="compact-list"></div>
+        </article>
+      </div>
+
+      <form id="room-form" class="admin-card admin-form">
+        <input type="hidden" name="id">
+        <h4 id="room-form-title">Agregar sala</h4>
+
+        <div class="form-row">
+          <label>Nombre<input name="name" required maxlength="160"></label>
+          <label>Abreviatura<input name="short" maxlength="12" required></label>
+        </div>
+
+        <div class="form-row">
+          <label>Edificio<input name="building" maxlength="40" placeholder="Ej. F"></label>
+          <label>Planta<input name="floor" maxlength="40" placeholder="Alta / Baja"></label>
+          <label>Capacidad<input name="capacity" type="number" min="0" step="1"></label>
+        </div>
+
+        <div class="form-row">
+          <label>
+            Estado
+            <select name="status">
+              <option value="available">Disponible</option>
+              <option value="maintenance">Mantenimiento</option>
+              <option value="out_of_service">Fuera de servicio</option>
+            </select>
+          </label>
+          <label>Equipamiento<input name="equipment" maxlength="300" placeholder="Proyector, audio, HDMI"></label>
+        </div>
+
+        <label>Observaciones<textarea name="notes" maxlength="1000" rows="2"></textarea></label>
+
+        <div class="actions">
+          <button type="button" id="room-form-reset">Limpiar</button>
+          <button class="primary" type="submit" data-mutation>Guardar sala</button>
+        </div>
+        <p class="form-error" id="room-error" role="alert"></p>
+      </form>
+
+      <article class="admin-card">
+        <div class="section-heading">
+          <div>
+            <h4>Bloqueos y mantenimiento</h4>
+            <p>Impide reservaciones sin crear un evento falso de maestro.</p>
+          </div>
+        </div>
+
+        <form id="block-form">
+          <input type="hidden" name="id">
+          <div class="form-row">
+            <label>Sala<select name="roomId" required></select></label>
+            <label>Fecha<input type="date" name="date" required></label>
+          </div>
+          <div class="form-row">
+            <label>Desde<select name="start" required></select></label>
+            <label>Hasta<select name="end" required></select></label>
+          </div>
+          <label>Motivo<input name="reason" required maxlength="240" placeholder="Ej. Mantenimiento del proyector"></label>
+          <div class="actions">
+            <button class="primary" type="submit" data-mutation>Agregar bloqueo</button>
+          </div>
+          <p class="form-error" id="block-error" role="alert"></p>
+        </form>
+
+        <div id="blocks-list" class="compact-list"></div>
+      </article>
+    </section>
+
+    <!-- USUARIOS -->
+    <section id="panel-users" class="admin-panel" data-admin-panel="users" hidden>
       <div class="section-heading">
         <div>
           <h3>Usuarios autorizados</h3>
-          <p>Solo la cuenta administradora puede agregar o retirar accesos. Los cambios se aplican en Firebase.</p>
+          <p>Revocar acceso conserva el historial del usuario y sus reservaciones.</p>
         </div>
       </div>
 
       <div id="users-list" class="users-list"></div>
 
-      <form id="user-form" class="new-user-form">
+      <form id="user-form" class="admin-card admin-form">
         <div class="form-row">
-          <label>
-            Nombre
-            <input name="name" required placeholder="Nombre completo">
-          </label>
-          <label>
-            Correo
-            <input type="email" name="email" required placeholder="usuario@uteq.edu.mx">
-          </label>
+          <label>Nombre<input name="name" required maxlength="160" placeholder="Nombre completo"></label>
+          <label>Correo<input type="email" name="email" required placeholder="usuario@uteq.edu.mx"></label>
         </div>
-        <button class="primary">＋ Agregar usuario</button>
+        <button class="primary" type="submit" data-mutation>＋ Agregar o reactivar usuario</button>
+        <p class="form-error" id="user-error" role="alert"></p>
       </form>
-      <p class="form-error" id="user-error" role="alert"></p>
     </section>
 
-    <section class="admin-section report-section">
+    <!-- REPORTES -->
+    <section id="panel-report" class="admin-panel report-section" data-admin-panel="report" hidden>
       <div class="section-heading">
         <div>
           <h3>Reporte de reservaciones</h3>
-          <p>Descarga un archivo de Excel por mes, año o periodo personalizado.</p>
+          <p>Excel por mes, año o periodo personalizado, ahora con hoja de estadísticas.</p>
         </div>
       </div>
 
@@ -296,14 +459,8 @@
         </div>
 
         <div id="report-custom-fields" class="form-row" hidden>
-          <label>
-            Desde
-            <input type="date" name="from" id="report-from">
-          </label>
-          <label>
-            Hasta
-            <input type="date" name="to" id="report-to">
-          </label>
+          <label>Desde<input type="date" name="from" id="report-from"></label>
+          <label>Hasta<input type="date" name="to" id="report-to"></label>
         </div>
 
         <fieldset class="report-rooms">
@@ -322,16 +479,95 @@
         <p class="form-error" id="report-error" role="alert"></p>
       </form>
     </section>
+
+    <!-- HISTORIAL -->
+    <section id="panel-audit" class="admin-panel" data-admin-panel="audit" hidden>
+      <div class="section-heading">
+        <div>
+          <h3>Historial / Bitácora</h3>
+          <p>Registra movimientos realizados desde esta versión; no inventa historial anterior.</p>
+        </div>
+      </div>
+
+      <div class="admin-filters">
+        <label>Desde<input type="date" id="audit-from"></label>
+        <label>Hasta<input type="date" id="audit-to"></label>
+        <button type="button" id="audit-load">Consultar</button>
+      </div>
+
+      <div id="audit-list" class="audit-list"></div>
+    </section>
+
+    <!-- CONFIGURACIÓN -->
+    <section id="panel-settings" class="admin-panel" data-admin-panel="settings" hidden>
+      <div class="section-heading">
+        <div>
+          <h3>Configuración</h3>
+          <p>Los valores existentes siguen siendo los predeterminados si aún no existe settings/main.</p>
+        </div>
+      </div>
+
+      <form id="settings-form" class="admin-card admin-form">
+        <div class="form-row">
+          <label>Hora inicial<input type="time" name="startTime" step="1800"></label>
+          <label>Hora final<input type="time" name="endTime" step="1800"></label>
+          <label>
+            Duración de bloque
+            <select name="blockMinutes">
+              <option value="30">30 minutos</option>
+              <option value="60">60 minutos</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Días habilitados</legend>
+          <div class="weekday-grid settings-weekdays">
+            <label><input type="checkbox" name="enabledDays" value="1"> Lun</label>
+            <label><input type="checkbox" name="enabledDays" value="2"> Mar</label>
+            <label><input type="checkbox" name="enabledDays" value="3"> Mié</label>
+            <label><input type="checkbox" name="enabledDays" value="4"> Jue</label>
+            <label><input type="checkbox" name="enabledDays" value="5"> Vie</label>
+            <label><input type="checkbox" name="enabledDays" value="6"> Sáb</label>
+          </div>
+        </fieldset>
+
+        <label>
+          Límite máximo de repetición
+          <select name="repeatLimitDays">
+            <option value="90">90 días</option>
+            <option value="180">180 días</option>
+            <option value="365">1 año</option>
+            <option value="730">2 años</option>
+          </select>
+        </label>
+
+        <div class="actions">
+          <button class="primary" type="submit" data-mutation>Guardar configuración</button>
+        </div>
+        <p class="form-error" id="settings-error" role="alert"></p>
+      </form>
+
+      <article class="admin-card backup-card">
+        <h4>Seguridad / Respaldo</h4>
+        <p>Descarga una copia JSON de salas, reservaciones, usuarios, configuración, bloqueos y bitácora. Esta función no modifica ni restaura Firestore.</p>
+        <button type="button" id="download-backup">↓ Descargar respaldo</button>
+        <p id="backup-status" class="report-preview"></p>
+      </article>
+    </section>
   </dialog>
 
+
+  <!-- CONFIRMACIÓN -->
   <dialog id="confirm-dialog" aria-labelledby="confirm-title">
     <h2 id="confirm-title"></h2>
     <p id="confirm-text"></p>
     <div class="actions">
-      <button id="cancel-delete">Cancelar</button>
-      <button id="confirm-delete" class="danger solid">Eliminar</button>
+      <button id="cancel-confirm">Volver</button>
+      <button id="confirm-action" class="danger solid" data-mutation>Confirmar</button>
     </div>
     <p id="confirm-error" class="form-error" role="alert"></p>
   </dialog>
+
 </body>
 </html>

@@ -1,0 +1,25 @@
+{
+  "version": "7.0",
+  "schemaVersion": 7,
+  "replaceInGitHub": [
+    "index.html",
+    "app.js",
+    "storage.js",
+    "core.js",
+    "styles.css"
+  ],
+  "publishInFirebase": [
+    "firestore.rules"
+  ],
+  "doNotReplace": [
+    "firebase.js"
+  ],
+  "sha256": {
+    "index.html": "aa08e0894c5083adb1f1dd4c046991b5769dc5f2427bc98b0391f0033977b1e8",
+    "app.js": "22c8595f7ff37a900b8b7ffa9850150498b1c733d98d3498eb5fb2af2f276172",
+    "storage.js": "b4b717b8b6ac4509e69c01423d49863cf4caebb833d7c9488ef2053d9f7df972",
+    "core.js": "48ed130172bb2be8007e2bf5aca342fbd2b885758fbb2309423f484139fe791f",
+    "styles.css": "594539382583455c0a1942bf5f434eb9659974aaf832d960c22d7f77f7b5e11f",
+    "firestore.rules": "53f032a103a60a1a0ff5877a4946ace780509156ca60f61a43fd793a983ab8ad"
+  }
+}

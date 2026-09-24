@@ -9,55 +9,179 @@ service cloud.firestore {
         && request.auth.token.email_verified == true;
     }
 
+    function email() {
+      return request.auth.token.email;
+    }
+
     function isOwner() {
       return signedIn()
-        && request.auth.token.email == "ivan.gutierrez@uteq.edu.mx";
+        && email() == "ivan.gutierrez@uteq.edu.mx";
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/authorizedUsers/$(email());
+    }
+
+    function userActive() {
+      return !get(userPath()).data.keys().hasAny(['active'])
+        || get(userPath()).data.active == true;
     }
 
     function isAuthorized() {
       return isOwner()
         || (
           signedIn()
-          && exists(
-            /databases/$(database)/documents/authorizedUsers/$(request.auth.token.email)
-          )
+          && exists(userPath())
+          && userActive()
         );
     }
 
-    match /authorizedUsers/{email} {
+    function statusOf(data) {
+      return data.keys().hasAny(['status'])
+        ? data.status
+        : 'active';
+    }
+
+    function creatorPreservedOrLegacy() {
+      return resource.data.keys().hasAny(['createdByEmail'])
+        ? (
+            request.resource.data.keys().hasAny(['createdByEmail'])
+            && request.resource.data.createdByEmail == resource.data.createdByEmail
+          )
+        : (
+            !request.resource.data.keys().hasAny(['createdByEmail'])
+            || request.resource.data.createdByEmail == email()
+          );
+    }
+
+    // --------------------------------------------------
+    // USUARIOS AUTORIZADOS
+    // --------------------------------------------------
+    match /authorizedUsers/{userEmail} {
+      // Cada persona puede consultar su propio documento incluso
+      // si el acceso fue revocado, para que la app pueda informarlo.
       allow get: if isOwner()
         || (
           signedIn()
-          && request.auth.token.email == email
+          && email() == userEmail
         );
 
       allow list: if isOwner();
-      allow create, update, delete: if isOwner();
+      allow create, update: if isOwner();
+
+      // Ya no se eliminan usuarios: se revoca con active=false.
+      allow delete: if false;
     }
 
+    // --------------------------------------------------
+    // SALAS
+    // --------------------------------------------------
     match /rooms/{roomId} {
       allow read: if isAuthorized();
-      allow create, update, delete: if isOwner();
+      allow create, update: if isOwner();
+
+      // Ya no se eliminan salas: se archivan con active=false.
+      allow delete: if false;
     }
 
+    // --------------------------------------------------
+    // RESERVACIONES
+    // --------------------------------------------------
     match /bookings/{bookingId} {
       allow read: if isAuthorized();
 
       allow create: if isAuthorized()
-        && request.resource.data.createdByEmail == request.auth.token.email
-        && request.resource.data.updatedByEmail == request.auth.token.email;
+        && request.resource.data.createdByEmail == email()
+        && request.resource.data.updatedByEmail == email()
+        && statusOf(request.resource.data) == 'active';
 
       allow update: if isAuthorized()
-        && request.resource.data.createdByEmail == resource.data.createdByEmail
-        && request.resource.data.updatedByEmail == request.auth.token.email;
+        && creatorPreservedOrLegacy()
+        && request.resource.data.updatedByEmail
+           == email()
+        && (
+          isOwner()
+          ||
+          (
+            statusOf(resource.data) == 'active'
+            && (
+              statusOf(request.resource.data) == 'active'
+              || statusOf(request.resource.data) == 'cancelled'
+            )
+          )
+        );
 
-      allow delete: if isAuthorized();
+      // Protección del historial.
+      allow delete: if false;
     }
 
+    // --------------------------------------------------
+    // BLOQUEOS DE 30 MINUTOS
+    // --------------------------------------------------
     match /locks/{lockId} {
-      allow read, create, update, delete: if isAuthorized();
+      allow read: if isAuthorized();
+
+      allow create, update: if isOwner()
+        || (
+          isAuthorized()
+          && (
+            !request.resource.data.keys().hasAny(['type'])
+            || request.resource.data.type == 'booking'
+          )
+        );
+
+      allow delete: if isOwner()
+        || (
+          isAuthorized()
+          && (
+            !resource.data.keys().hasAny(['type'])
+            || resource.data.type == 'booking'
+          )
+        );
     }
 
+    // --------------------------------------------------
+    // BLOQUEOS ADMINISTRATIVOS / MANTENIMIENTO
+    // --------------------------------------------------
+    match /roomBlocks/{blockId} {
+      allow read: if isAuthorized();
+      allow create, update: if isOwner();
+      allow delete: if false;
+    }
+
+    // --------------------------------------------------
+    // BITÁCORA
+    // --------------------------------------------------
+    match /auditLogs/{logId} {
+      allow create: if isAuthorized()
+        && request.resource.data.actorEmail == email();
+
+      allow read: if isOwner();
+
+      // La bitácora es inmutable desde el cliente.
+      allow update, delete: if false;
+    }
+
+    // --------------------------------------------------
+    // CONFIGURACIÓN
+    // --------------------------------------------------
+    match /settings/{settingId} {
+      allow read: if isAuthorized();
+      allow create, update: if isOwner();
+      allow delete: if false;
+    }
+
+    // --------------------------------------------------
+    // MARCADOR DE INSTALACIÓN
+    // --------------------------------------------------
+    match /system/{documentId} {
+      allow read, create, update: if isOwner();
+      allow delete: if false;
+    }
+
+    // --------------------------------------------------
+    // TODO LO DEMÁS
+    // --------------------------------------------------
     match /{document=**} {
       allow read, write: if false;
     }

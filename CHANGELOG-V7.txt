@@ -1,0 +1,19 @@
+V7.0 · CAMBIOS IMPLEMENTADOS
+
+- Corregido filtro rápido Hoy.
+- Agregado Ir a fecha.
+- Agregada hora de última sincronización.
+- Agregado indicador visible de errores críticos de JavaScript.
+- Agregada versión/esquema visible en el pie.
+- Auto-scroll inicial cerca de la hora actual.
+- Mayor superficie útil del calendario en escritorio.
+- Refinamiento visual verde petróleo/gris azulado.
+- Mantiene sábado gris tenue, día actual y tintes por planta.
+- Edición retrocompatible de horarios históricos si cambia blockMinutes.
+- Drag & drop conserva duración exacta original.
+- Bloqueos de mantenimiento ahora se desactivan en vez de borrarse.
+- Respaldo JSON ampliado con auditLogs, system/installation y manifest.
+- El propietario se muestra siempre en Administración > Usuarios.
+- Límites amplios de longitud en campos para evitar pegados accidentales.
+- firestore.rules impide eliminar físicamente roomBlocks.
+- Sin cambios a projectId, credenciales ni firebase.js.

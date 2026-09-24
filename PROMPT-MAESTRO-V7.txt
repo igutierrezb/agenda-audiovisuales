@@ -1,0 +1,45 @@
+PROMPT MAESTRO V7.0 · AGENDA DE RESERVACIÓN DE SALAS AUDIOVISUALES
+
+Trabaja sobre la versión V6 existente y en producción. No crees un proyecto nuevo, no cambies el projectId ni las credenciales, no renombres colecciones y no elimines datos existentes. Toda mejora debe ser retrocompatible con bookings, rooms, authorizedUsers, locks, roomBlocks, auditLogs, settings y system ya existentes.
+
+OBJETIVO GENERAL
+Convertir la agenda en una herramienta institucional de operación permanente, optimizada principalmente para escritorio (aprox. 90% del uso), manteniendo una experiencia móvil funcional y reducida. Prioriza estabilidad, densidad visual, seguridad de datos, legibilidad y mantenimiento a largo plazo por encima de efectos decorativos.
+
+PRINCIPIOS
+1. No borrar ni reescribir masivamente información histórica.
+2. Los documentos sin campos nuevos deben seguir funcionando.
+3. Toda operación destructiva debe convertirse, cuando sea razonable, en estado inactivo/cancelado y conservar auditoría.
+4. Mantener las consultas de bookings por rango de fechas; nunca volver a cargar todo el historial para la vista semanal.
+5. Mantener locks como mecanismo de exclusión de horarios.
+6. Mantener el administrador principal y la lista explícita de usuarios autorizados.
+7. Mantener el calendario simple para usuarios normales y concentrar la complejidad en Administración.
+
+MEJORAS A IMPLEMENTAR
+A. Corregir el filtro rápido “Hoy” para seleccionar realmente la columna del día actual, incluso después de cambios de configuración de días habilitados.
+B. Añadir un selector “Ir a fecha” para navegar rápidamente a cualquier semana sin recorrerla flecha por flecha.
+C. Mostrar hora de última sincronización junto al estado en tiempo real.
+D. Añadir manejo visible de errores JavaScript graves mediante una banda de error, sin ocultar silenciosamente fallos de carga.
+E. Mostrar discretamente la versión de aplicación/esquema en el pie.
+F. En el primer acceso de la jornada, si la semana visible contiene hoy, posicionar el calendario cerca de la hora actual; no forzar el scroll después de que el usuario ya empezó a navegar.
+G. Mantener y refinar el diseño de escritorio: reducir espacio ornamental superior, aumentar área útil del calendario, conservar encabezados fijos, hora actual, sábado gris tenue, diferencias sutiles entre plantas y colores pastel de reservaciones.
+H. Mantener responsive móvil sin intentar convertir la interfaz de escritorio en una miniatura.
+I. Garantizar retrocompatibilidad si en el futuro cambia blockMinutes: una reservación histórica con horario :30 debe seguir pudiéndose editar; al arrastrar una reservación debe conservar exactamente su duración original.
+J. No eliminar físicamente roomBlocks al quitarlos: liberar sus locks pero conservar el documento con active=false, removedAt y removedByEmail. La vista operativa solo muestra bloqueos activos.
+K. Ampliar el respaldo administrativo JSON para incluir también roomBlocks, auditLogs y system/installation, además de un manifest con conteos y schemaVersion.
+L. Mostrar al administrador principal en la lista de usuarios incluso si su acceso se resuelve por OWNER_EMAIL y no existe un documento propio en authorizedUsers.
+M. Añadir límites razonables maxlength en formularios para reducir errores por pegado accidental, sin alterar registros existentes.
+N. Endurecer firestore.rules para impedir eliminación física de roomBlocks, manteniendo create/update solo para el administrador.
+O. Mantener todas las funciones V6: login persistente, permisos, reportes, estadísticas, cancelación/restauración, archivo de salas, revocación/reactivación, auditoría, mantenimiento, configuración, backup, colores, repetición, drag & drop, filtros y sincronización por rango.
+
+PRUEBAS OBLIGATORIAS
+- node --check de app.js, storage.js y core.js.
+- Confirmar que todos los IDs usados mediante $('#...') existan en index.html.
+- Confirmar que todos los imports locales existan.
+- Confirmar que index.html use ?v=7.0 en app.js y styles.css, app.js use core.js/storage.js ?v=7.0 y storage.js use core.js ?v=7.0.
+- Comprobar que no exista delete de bookings, rooms o authorizedUsers en firestore.rules.
+- Comprobar que roomBlocks tampoco permita delete en V7.
+- Comprobar que el proyecto conserva exactamente el mismo firebase.js y, por tanto, el mismo Firebase projectId y credenciales.
+- No ejecutar ninguna migración ni escritura sobre Firestore durante la preparación local de archivos.
+
+ENTREGA
+Entregar archivos completos modificados, ZIP para GitHub, ZIP completo con firestore.rules, prompt maestro, análisis de mejoras, validación y pasos de actualización. Indicar claramente que primero se publican las reglas y después se sustituyen los archivos de GitHub. No modificar firebase.js.

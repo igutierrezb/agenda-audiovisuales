@@ -1,0 +1,61 @@
+ACTUALIZACIÓN V7.0 · ORDEN RECOMENDADO
+
+IMPORTANTE: esta actualización no necesita borrar, vaciar ni migrar Firestore.
+
+ANTES DE EMPEZAR
+1. Conserva el ZIP V6 actual como copia local.
+2. NO borres colecciones ni documentos en Firebase.
+3. NO modifiques firebase.js.
+
+PASO 1 · FIREBASE
+1. Abre Firebase Console del proyecto agenda-audiovisuales-din.
+2. Entra a Firestore Database > Reglas.
+3. Copia TODO el contenido del archivo firestore.rules de V7.
+4. Sustituye el contenido del editor de reglas.
+5. Pulsa Publicar.
+6. No toques Datos, Authentication ni índices.
+
+PASO 2 · GITHUB
+En el repositorio igutierrezb/agenda-audiovisuales reemplaza exactamente:
+- index.html
+- app.js
+- storage.js
+- core.js
+- styles.css
+
+NO reemplaces:
+- firebase.js
+
+Haz commit directamente a la rama que publica GitHub Pages.
+
+PASO 3 · ESPERAR Y RECARGAR
+1. Espera a que GitHub Pages termine el despliegue.
+2. Abre https://igutierrezb.github.io/agenda-audiovisuales/
+3. Haz Ctrl+F5 una sola vez.
+4. Debes ver v7.0 en el pie.
+
+PRUEBA RÁPIDA DESPUÉS DE PUBLICAR
+1. Inicia sesión con tu cuenta.
+2. Verifica que aparecen las reservaciones ya existentes.
+3. Pulsa Hoy y comprueba que abre el día correcto.
+4. Usa Ir a fecha para cambiar de semana.
+5. Crea una reservación de prueba en un horario libre.
+6. Muévela de sala/día y confirma que conserva la duración.
+7. Cancélala (no debe desaparecer del historial administrativo).
+8. En Administración > Reservaciones comprueba que aparece cancelada.
+9. En Administración > Resumen comprueba indicadores.
+10. En Administración > Seguridad/Respaldo descarga un JSON y conserva esa primera copia V7.
+
+ROLLBACK DE INTERFAZ SI ALGO VISUAL FALLA
+Si la página presenta un problema de interfaz, puedes volver a subir los cinco archivos V6 anteriores. No borres datos de Firestore. La actualización V7 es retrocompatible y no exige deshacer datos.
+
+ARCHIVOS V7 QUE SÍ SE ACTUALIZAN
+index.html
+app.js
+storage.js
+core.js
+styles.css
+firestore.rules (se publica en Firebase, no como sustituto funcional en GitHub)
+
+ARCHIVO QUE NO SE TOCA
+firebase.js
