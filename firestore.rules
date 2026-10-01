@@ -121,7 +121,20 @@ service cloud.firestore {
     match /locks/{lockId} {
       allow read: if isAuthorized();
 
-      allow create, update: if isOwner()
+      // Cualquier usuario autorizado puede crear locks de reservación
+      // o de bloqueo general de sala.
+      allow create: if isOwner()
+        || (
+          isAuthorized()
+          && (
+            !request.resource.data.keys().hasAny(['type'])
+            || request.resource.data.type == 'booking'
+            || request.resource.data.type == 'roomBlock'
+          )
+        );
+
+      // Las actualizaciones de locks existentes mantienen la lógica previa.
+      allow update: if isOwner()
         || (
           isAuthorized()
           && (
@@ -145,8 +158,15 @@ service cloud.firestore {
     // --------------------------------------------------
     match /roomBlocks/{blockId} {
       allow read: if isAuthorized();
-      allow create, update: if isOwner();
-      allow delete: if false;
+
+      // El bloqueo de sala es una función general para cualquier
+      // usuario autorizado de la agenda.
+      allow create: if isAuthorized()
+        && request.resource.data.createdByEmail == email()
+        && request.resource.data.updatedByEmail == email();
+
+      // La administración de bloqueos existentes permanece protegida.
+      allow update, delete: if isOwner();
     }
 
     // --------------------------------------------------

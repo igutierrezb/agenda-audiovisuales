@@ -1,11 +1,10 @@
 import {
-  APP_SCHEMA_VERSION,
   INITIAL_ROOMS,
   DEFAULT_SETTINGS,
   minutes,
   normalizeSettings,
   validateBooking
-} from './core.js?v=7.0';
+} from './core.js?v=6.0';
 
 import {
   db,
@@ -82,6 +81,20 @@ function normalizeRoom(room) {
   };
 }
 
+function roomDisplayRank(room) {
+  const text = `${room?.id || ''} ${room?.name || ''} ${room?.short || ''}`
+    .toLocaleLowerCase('es-MX');
+
+  if (text.includes('planta baja') || text.includes('baja-f') || /\bpb\b/.test(text)) return 0;
+  if (text.includes('planta alta') || text.includes('alta-f') || /\bpa\b/.test(text)) return 1;
+  return 2;
+}
+
+function compareRooms(a, b) {
+  return roomDisplayRank(a) - roomDisplayRank(b) ||
+    String(a.name).localeCompare(String(b.name), 'es');
+}
+
 function normalizeBooking(booking) {
   return {
     ...booking,
@@ -94,13 +107,6 @@ function normalizeUser(user) {
   return {
     ...user,
     active: user?.active !== false
-  };
-}
-
-function normalizeBlock(block) {
-  return {
-    ...block,
-    active: block?.active !== false
   };
 }
 
@@ -263,36 +269,60 @@ export const repository = {
     return getSettings();
   },
 
-  subscribeRange({ from, to }, callback, onError) {
+  subscribeStatic(callback, onError) {
     let rooms = [];
-    let bookings = [];
-    let blocks = [];
     let settings = normalizeSettings();
     let roomsReady = false;
-    let bookingsReady = false;
-    let blocksReady = false;
     let settingsReady = false;
 
     const emit = () => {
-      if (!roomsReady || !bookingsReady || !blocksReady || !settingsReady) return;
+      if (!roomsReady || !settingsReady) return;
 
       callback({
         rooms: rooms
           .map(normalizeRoom)
-          .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es')),
+          .sort(compareRooms),
+        settings
+      });
+    };
+
+    const unsubs = [
+      onSnapshot(roomsCollection, snapshot => {
+        rooms = snapshot.docs.map(docData);
+        roomsReady = true;
+        emit();
+      }, onError),
+
+      onSnapshot(settingsRef, snapshot => {
+        settings = normalizeSettings(snapshot.exists() ? snapshot.data() : DEFAULT_SETTINGS);
+        settingsReady = true;
+        emit();
+      }, onError)
+    ];
+
+    return () => unsubs.forEach(unsub => unsub?.());
+  },
+
+  subscribeRange({ from, to }, callback, onError) {
+    let bookings = [];
+    let blocks = [];
+    let bookingsReady = false;
+    let blocksReady = false;
+
+    const emit = () => {
+      if (!bookingsReady || !blocksReady) return;
+
+      callback({
         bookings: bookings
           .map(normalizeBooking)
           .sort((a, b) =>
             String(a.date).localeCompare(String(b.date)) ||
             minutes(a.start) - minutes(b.start)
           ),
-        blocks: blocks
-          .map(normalizeBlock)
-          .sort((a, b) =>
-            String(a.date).localeCompare(String(b.date)) ||
-            minutes(a.start) - minutes(b.start)
-          ),
-        settings
+        blocks: blocks.sort((a, b) =>
+          String(a.date).localeCompare(String(b.date)) ||
+          minutes(a.start) - minutes(b.start)
+        )
       });
     };
 
@@ -309,12 +339,6 @@ export const repository = {
     );
 
     const unsubs = [
-      onSnapshot(roomsCollection, snapshot => {
-        rooms = snapshot.docs.map(docData);
-        roomsReady = true;
-        emit();
-      }, onError),
-
       onSnapshot(bookingsQuery, snapshot => {
         bookings = snapshot.docs.map(docData);
         bookingsReady = true;
@@ -324,12 +348,6 @@ export const repository = {
       onSnapshot(blocksQuery, snapshot => {
         blocks = snapshot.docs.map(docData);
         blocksReady = true;
-        emit();
-      }, onError),
-
-      onSnapshot(settingsRef, snapshot => {
-        settings = normalizeSettings(snapshot.exists() ? snapshot.data() : DEFAULT_SETTINGS);
-        settingsReady = true;
         emit();
       }, onError)
     ];
@@ -350,14 +368,7 @@ export const repository = {
 
   async queryBlocksRange(from, to) {
     const snapshot = await queryByDate(blocksCollection, from, to);
-    return snapshot.docs
-      .map(docData)
-      .map(normalizeBlock)
-      .filter(block => block.active !== false)
-      .sort((a, b) =>
-        String(a.date).localeCompare(String(b.date)) ||
-        minutes(a.start) - minutes(b.start)
-      );
+    return snapshot.docs.map(docData);
   },
 
   async saveBooking(source, actorEmail) {
@@ -1007,9 +1018,126 @@ export const repository = {
     await batch.commit();
   },
 
+  async saveRoomBlocks(sources, actorEmail) {
+    const actor = cleanEmail(actorEmail);
+    if (!actor) {
+      throw new Error('No se pudo identificar al usuario.');
+    }
+
+    const blocks = sources.map(blockShape);
+    if (!blocks.length) throw new Error('No hay bloqueos para guardar.');
+
+    for (const block of blocks) {
+      if (!block.roomId || !block.date || !block.start || !block.end || !block.reason) {
+        throw new Error('Completa sala, fecha, horario y motivo.');
+      }
+
+      if (minutes(block.start) >= minutes(block.end)) {
+        throw new Error(`${block.date}: la hora final debe ser posterior a la inicial.`);
+      }
+    }
+
+    const blockRefs = blocks.map(() => doc(blocksCollection));
+    const totalWrites = blocks.reduce(
+      (sum, block) => sum + 1 + slotMinutes(block).length,
+      0
+    ) + 1;
+
+    if (totalWrites > 380) {
+      throw new Error('El periodo de bloqueo es demasiado amplio. Reduce el número de días y vuelve a intentarlo.');
+    }
+
+    await runTransaction(db, async transaction => {
+      const roomIds = [...new Set(blocks.map(block => block.roomId))];
+
+      for (const roomId of roomIds) {
+        const roomRef = doc(db, 'rooms', roomId);
+        const roomSnap = await transaction.get(roomRef);
+        activeRoomOrThrow(roomSnap.exists() ? normalizeRoom(roomSnap.data()) : null);
+      }
+
+      const lockItems = [];
+      const requestedLocks = new Set();
+
+      for (let index = 0; index < blocks.length; index++) {
+        const block = blocks[index];
+        const blockRef = blockRefs[index];
+
+        for (const value of slotMinutes(block)) {
+          const id = lockId(block.roomId, block.date, value);
+
+          if (requestedLocks.has(id)) {
+            throw new Error(`${block.date}: existen horarios duplicados dentro del bloqueo solicitado.`);
+          }
+
+          requestedLocks.add(id);
+          lockItems.push({ id, block, blockRef });
+        }
+      }
+
+      const snapshots = new Map();
+
+      for (const item of lockItems) {
+        snapshots.set(
+          item.id,
+          await transaction.get(doc(db, 'locks', item.id))
+        );
+      }
+
+      for (const item of lockItems) {
+        if (snapshots.get(item.id)?.exists()) {
+          throw new Error(`${item.block.date}: existe una reservación o bloqueo en ese horario. No se realizó ningún bloqueo.`);
+        }
+      }
+
+      for (const item of lockItems) {
+        transaction.set(doc(db, 'locks', item.id), {
+          type: 'roomBlock',
+          blockId: item.blockRef.id,
+          roomId: item.block.roomId,
+          date: item.block.date,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      for (let index = 0; index < blocks.length; index++) {
+        const block = blocks[index];
+        const blockRef = blockRefs[index];
+
+        transaction.set(blockRef, {
+          roomId: block.roomId,
+          date: block.date,
+          start: block.start,
+          end: block.end,
+          reason: block.reason,
+          active: true,
+          createdAt: serverTimestamp(),
+          createdByEmail: actor,
+          updatedAt: serverTimestamp(),
+          updatedByEmail: actor
+        });
+      }
+
+      transaction.set(doc(auditCollection), auditPayload(
+        'ROOM_BLOCK_SERIES_CREATED',
+        actor,
+        {
+          roomId: blocks[0].roomId,
+          blockIds: blockRefs.map(ref => ref.id),
+          count: blocks.length,
+          from: blocks[0].date,
+          to: blocks[blocks.length - 1].date,
+          reason: blocks[0].reason
+        }
+      ));
+    });
+
+    return blockRefs.map(ref => ref.id);
+  },
+
   async saveRoomBlock(source, actorEmail) {
     const actor = cleanEmail(actorEmail);
-    if (actor !== OWNER_EMAIL) throw new Error('Solo el administrador puede bloquear salas.');
+    if (!actor) throw new Error('No se pudo identificar al usuario.');
 
     const block = blockShape(source);
     if (!block.roomId || !block.date || !block.start || !block.end || !block.reason) {
@@ -1116,39 +1244,20 @@ export const repository = {
       const snapshot = await transaction.get(blockRef);
       if (!snapshot.exists()) return;
 
-      const block = normalizeBlock({ id: snapshot.id, ...snapshot.data() });
-      if (block.active === false) return;
+      const block = { id: snapshot.id, ...snapshot.data() };
 
-      const lockRefs = slotMinutes(block).map(value =>
-        doc(db, 'locks', lockId(block.roomId, block.date, value))
-      );
-      const lockSnapshots = [];
-
-      // Firestore exige completar las lecturas antes de comenzar las escrituras.
-      for (const lockRef of lockRefs) {
-        lockSnapshots.push(await transaction.get(lockRef));
+      for (const value of slotMinutes(block)) {
+        transaction.delete(
+          doc(db, 'locks', lockId(block.roomId, block.date, value))
+        );
       }
 
-      for (let i = 0; i < lockRefs.length; i++) {
-        const lockSnap = lockSnapshots[i];
-        if (lockSnap.exists() && lockSnap.data()?.blockId === id) {
-          transaction.delete(lockRefs[i]);
-        }
-      }
-
-      transaction.set(blockRef, {
-        active: false,
-        removedAt: serverTimestamp(),
-        removedByEmail: actor,
-        updatedAt: serverTimestamp(),
-        updatedByEmail: actor
-      }, { merge: true });
+      transaction.delete(blockRef);
 
       transaction.set(doc(auditCollection), auditPayload('ROOM_BLOCK_REMOVED', actor, {
         roomId: block.roomId,
         blockId: id,
-        before: block,
-        after: { ...block, active: false, removedByEmail: actor }
+        before: block
       }));
     });
   },
@@ -1211,40 +1320,23 @@ export const repository = {
   },
 
   async downloadBackupData() {
-    const [rooms, bookings, users, settings, blocks, auditLogs, installation] = await Promise.all([
+    const [rooms, bookings, users, settings, blocks] = await Promise.all([
       getDocs(roomsCollection),
       getDocs(bookingsCollection),
       getDocs(usersCollection),
       getDoc(settingsRef),
-      getDocs(blocksCollection),
-      getDocs(auditCollection),
-      getDoc(installationRef)
+      getDocs(blocksCollection)
     ]);
 
-    const payload = {
-      format: 'agenda-audiovisuales-backup-v2',
-      schemaVersion: APP_SCHEMA_VERSION,
+    return {
+      format: 'agenda-audiovisuales-backup-v1',
       generatedAt: new Date().toISOString(),
       projectId: 'agenda-audiovisuales-din',
       rooms: rooms.docs.map(docData),
       bookings: bookings.docs.map(docData),
       authorizedUsers: users.docs.map(docData),
       settings: settings.exists() ? settings.data() : normalizeSettings(),
-      roomBlocks: blocks.docs.map(docData),
-      auditLogs: auditLogs.docs.map(docData),
-      system: {
-        installation: installation.exists() ? installation.data() : null
-      }
+      roomBlocks: blocks.docs.map(docData)
     };
-
-    payload.manifest = {
-      rooms: payload.rooms.length,
-      bookings: payload.bookings.length,
-      authorizedUsers: payload.authorizedUsers.length,
-      roomBlocks: payload.roomBlocks.length,
-      auditLogs: payload.auditLogs.length
-    };
-
-    return payload;
   }
 };

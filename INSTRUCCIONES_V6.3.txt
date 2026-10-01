@@ -1,0 +1,43 @@
+AGENDA AUDIOVISUALES DIN · V6.3 OPTIMIZADA
+
+RUTA DE ACTUALIZACIÓN
+- Esta versión se instala DIRECTAMENTE sobre V6.1.
+- NO es necesario instalar V6.2.
+- V6.3 ya incorpora el bloqueo general propuesto anteriormente.
+- No migra, borra ni reescribe masivamente datos existentes.
+
+GITHUB: sustituir completos
+1. index.html
+2. app.js
+3. styles.css
+4. storage.js
+
+NO MODIFICAR
+- core.js
+- firebase.js
+- .github/workflows/deploy-pages.yml
+- colecciones/datos existentes
+
+FIREBASE
+Como partes desde V6.1, publica también el archivo firestore.rules incluido en este paquete.
+Este cambio permite que los usuarios ya autorizados utilicen el bloqueo general de salas.
+No habilita usuarios anónimos.
+
+OPTIMIZACIONES V6.3
+- rooms y settings quedan en listeners permanentes durante la sesión.
+- bookings y roomBlocks se escuchan únicamente para la semana visible.
+- cambiar de semana ya no vuelve a leer rooms/settings.
+- se elimina la lectura inicial duplicada de settings/main.
+- guardar/cancelar/restaurar/bloquear ya no fuerza una recarga completa cuando el listener en tiempo real ya entrega el cambio.
+- al reconectarse la red no se destruyen y recrean manualmente los listeners.
+- orden visual fijo: Planta Baja F primero (izquierda) y Planta Alta F después (derecha).
+- locks continúa exactamente con el esquema de 30 minutos de V6.1/V6.2.
+
+SINCRONIZACIÓN
+Los usuarios conectados conservan onSnapshot. Después de una escritura confirmada por Firestore, el cambio se refleja por el listener en tiempo real.
+
+DESPUÉS DE PUBLICAR
+1. Publica firestore.rules en Firebase.
+2. Sustituye los cuatro archivos de GitHub.
+3. Haz Commit.
+4. Cuando Pages termine de publicar, haz Ctrl+F5 una vez.

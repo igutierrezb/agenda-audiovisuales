@@ -1,9 +1,10 @@
-import { APP_SCHEMA_VERSION, DEFAULT_SETTINGS, normalizeSettings, minutes, timeLabel, dateKey, parseDate, monday, addDays } from './core.js?v=7.0';
-import { repository } from './storage.js?v=7.0';
+import { DEFAULT_SETTINGS, normalizeSettings, minutes, timeLabel, dateKey, parseDate, monday, addDays } from './core.js?v=6.0';
+import { repository } from './storage.js?v=6.3';
 import { authService, OWNER_EMAIL } from './firebase.js?v=4.1';
 
+// V6.3 · Optimización segura: listeners separados y sin recargas redundantes.
+
 // Densidad visual del calendario: cada bloque representa 30 minutos.
-const APP_VERSION = '7.0';
 const SLOT_HEIGHT = 48;
 const HOUR_HEIGHT = SLOT_HEIGHT * 2;
 
@@ -258,7 +259,10 @@ let currentBooking = null;
 let confirmAction = null;
 let noticeTimer = null;
 let currentUser = null;
-let unsubscribeRealtime = null;
+let unsubscribeStaticRealtime = null;
+let unsubscribeRangeRealtime = null;
+let staticRealtimeReady = false;
+let rangeRealtimeReady = false;
 let dragState = null;
 let bookingDragState = null;
 let suppressBookingClick = false;
@@ -269,7 +273,6 @@ let adminBookings = [];
 let adminRooms = [];
 let adminUsers = [];
 let currentAdminBooking = null;
-let initialCalendarScrollDone = false;
 
 const DAY_LABELS = {
   1: 'Lun',
@@ -320,35 +323,6 @@ function enabledDates() {
   const enabled = settings().enabledDays;
   return Array.from({ length: 6 }, (_, i) => addDays(week, i))
     .filter(date => enabled.includes(date.getDay()));
-}
-
-function dayIndexForDate(targetDate) {
-  const key = dateKey(targetDate);
-  const index = enabledDates().findIndex(date => dateKey(date) === key);
-  return index >= 0 ? index : 0;
-}
-
-function goToDate(targetDate, view = 'week') {
-  const parsed = targetDate instanceof Date ? targetDate : parseDate(String(targetDate || ''));
-  if (Number.isNaN(parsed.getTime())) return;
-
-  week = monday(parsed);
-  quickView = view;
-  selectedDay = dayIndexForDate(parsed);
-  refreshVisibleRange();
-}
-
-function ensureSelectOption(select, value) {
-  value = String(value || '');
-  if (!select || !value || select.querySelector(`option[value="${value}"]`)) return;
-
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = `${value} · horario existente`;
-  select.appendChild(option);
-
-  const options = Array.from(select.options).sort((a, b) => minutes(a.value) - minutes(b.value));
-  select.replaceChildren(...options);
 }
 
 function visibleRange() {
@@ -480,9 +454,6 @@ function setOnlineState(value, message = '') {
   if (!isOnline) {
     sync.textContent = '● Sin conexión · modo consulta';
     sync.classList.remove('online');
-    if ($('#last-sync') && !$('#last-sync').textContent.startsWith('Últimos')) {
-      $('#last-sync').textContent = `Últimos datos · ${$('#last-sync').textContent.replace(/^Actualizado\s*/, '') || 'sin confirmar'}`;
-    }
   } else if (message) {
     sync.textContent = message;
   }
@@ -575,14 +546,6 @@ function render() {
 
   $('#schedule-label').textContent =
     `${days.map(day => DAY_LABELS[day.getDay()]).join(', ')} · ${settings().startTime}–${settings().endTime}`;
-
-  if ($('#jump-date')) {
-    $('#jump-date').value = dateKey(days[selectedDay] || first);
-  }
-
-  if ($('#app-version')) {
-    $('#app-version').textContent = `v${APP_VERSION} · esquema ${APP_SCHEMA_VERSION}`;
-  }
 
   let visibleBookings = state.bookings.filter(booking =>
     bookingStatus(booking) === 'active' &&
@@ -739,7 +702,7 @@ function render() {
                           top:${((minutes(block.start) - startM) / step) * SLOT_HEIGHT + 2}px;
                           height:${Math.max(((minutes(block.end) - minutes(block.start)) / step) * SLOT_HEIGHT - 4, 24)}px">
                         <span>${escape(block.start)}–${escape(block.end)}</span>
-                        <strong>MANTENIMIENTO</strong>
+                        <strong>BLOQUEO</strong>
                         <small>${escape(block.reason || 'Bloqueo administrativo')}</small>
                       </button>
                     `).join('')}
@@ -751,25 +714,24 @@ function render() {
                     )
                     .map(booking => {
                       const duration = minutes(booking.end) - minutes(booking.start);
-                      const audit = duration >= 60
-                        ? bookingAuditHtml(booking)
-                        : '';
+                      const audit = bookingAuditHtml(booking);
+                      const cardHeight = Math.max((duration / step) * SLOT_HEIGHT - 4, 24);
 
                       return `
                         <button
                           class="booking ${duration <= step ? 'compact-booking' : ''}"
                           style="
                             top:${((minutes(booking.start) - startM) / step) * SLOT_HEIGHT + 2}px;
-                            height:${Math.max((duration / step) * SLOT_HEIGHT - 4, 24)}px;
+                            --booking-height:${cardHeight}px;
+                            height:var(--booking-height);
                             ${bookingColorStyle(booking)}"
                           data-booking="${escape(booking.id)}"
-                          aria-label="${escape(`${booking.teacher}, ${booking.group}, ${booking.activity}, ${booking.start} a ${booking.end}, ${room.name}`)}"
-                          title="${escape(`${room.name}\n${booking.teacher} · ${booking.group}\n${booking.activity}\n${booking.start}–${booking.end}`)}">
+                          aria-label="${escape(`${booking.activity}, ${booking.teacher}, ${booking.group}, ${booking.start} a ${booking.end}, ${room.name}`)}"
+                          title="${escape(`${booking.activity}\n${booking.teacher} · ${booking.group}\n${room.name}\n${booking.start}–${booking.end}`)}">
+                          <strong class="booking-title">${escape(booking.activity || 'Reservación')}</strong>
+                          <span class="booking-person">${escape(booking.teacher)}</span>
+                          <span class="booking-meta"><b>${escape(booking.group)}</b></span>
                           <span class="time">${escape(booking.start)}–${escape(booking.end)}</span>
-                          <strong>${escape(booking.teacher)}</strong>
-                          <span class="booking-meta">
-                            <b>${escape(booking.group)}</b>${booking.activity ? ` · ${escape(booking.activity)}` : ''}
-                          </span>
                           ${audit}
                         </button>
                       `;
@@ -792,18 +754,7 @@ function render() {
     </div>
   `;
 
-  if (!initialCalendarScrollDone && days.some(date => dateKey(date) === todayKey)) {
-    const currentTop = ((currentMinutes - startM) / step) * SLOT_HEIGHT;
-    if (currentMinutes >= startM && currentMinutes <= endM) {
-      calendar.scrollTop = Math.max(0, currentTop - 150);
-    } else {
-      calendar.scrollTop = scrollTop;
-    }
-    initialCalendarScrollDone = true;
-  } else {
-    calendar.scrollTop = scrollTop;
-  }
-
+  calendar.scrollTop = scrollTop;
   updateMutationAvailability();
 }
 
@@ -903,11 +854,6 @@ function openBooking(values = {}) {
       defaultColorKey(values.createdByEmail || currentUser?.email)
   };
 
-  // Retrocompatibilidad: si la configuración futura cambia el tamaño del bloque,
-  // una reservación antigua de :30 debe seguir siendo editable sin alterar su hora.
-  ensureSelectOption(form.elements.start, merged.start);
-  ensureSelectOption(form.elements.end, merged.end);
-
   for (const [key, value] of Object.entries(merged)) {
     if (form.elements[key]) {
       form.elements[key].value = value ?? '';
@@ -940,12 +886,12 @@ function showBookingDetails(booking) {
   const status = bookingStatus(booking);
 
   $('#detail-title').textContent =
-    `${roomShort(booking.roomId)} · ${roomName(booking.roomId)}`;
+    booking.activity || 'Reservación';
 
   $('#details').innerHTML = [
-    ['Maestro', booking.teacher],
-    ['Grupo', booking.group],
-    ['Actividad', booking.activity],
+    ['Maestro o persona que aparta', booking.teacher],
+    ['Grupo o área', booking.group],
+    ['Sala', `${roomShort(booking.roomId)} · ${roomName(booking.roomId)}`],
     ['Fecha', fullDate(parseDate(booking.date))],
     ['Horario', `${booking.start}–${booking.end}`],
     ['Estado', status === 'cancelled' ? 'Cancelada' : 'Activa'],
@@ -1521,22 +1467,42 @@ function bookingDropTarget(lane, clientY, booking, grabOffsetY = 0) {
   if (!lane || !booking) return null;
 
   const step = slotMinutesValue();
-  const duration = Math.max(step / 2, minutes(booking.end) - minutes(booking.start));
-  const rect = lane.getBoundingClientRect();
-  const rawTop = clientY - rect.top - grabOffsetY;
+  const duration =
+    minutes(booking.end) - minutes(booking.start);
 
-  const maxStart = Math.max(dayStartMinutes(), dayEndMinutes() - duration);
-  const rawMinutes = dayStartMinutes() + Math.round(rawTop / SLOT_HEIGHT) * step;
-  const startMinutes = Math.max(dayStartMinutes(), Math.min(maxStart, rawMinutes));
-  const endMinutes = Math.min(dayEndMinutes(), startMinutes + duration);
+  const durationSlots =
+    Math.max(1, Math.ceil(duration / step));
+
+  const rect = lane.getBoundingClientRect();
+  const rawTop =
+    clientY - rect.top - grabOffsetY;
+
+  const maxStartIndex =
+    Math.max(0, slotCount() - durationSlots);
+
+  const slotIndex = Math.max(
+    0,
+    Math.min(
+      maxStartIndex,
+      Math.round(rawTop / SLOT_HEIGHT)
+    )
+  );
+
+  const startM =
+    dayStartMinutes() + slotIndex * step;
+
+  const endM = startM + duration;
 
   return {
     roomId: lane.dataset.room,
     date: lane.dataset.date,
-    start: timeLabel(startMinutes),
-    end: timeLabel(endMinutes),
-    top: ((startMinutes - dayStartMinutes()) / step) * SLOT_HEIGHT + 2,
-    height: Math.max((duration / step) * SLOT_HEIGHT - 4, 24)
+    start: timeLabel(startM),
+    end: timeLabel(endM),
+    top: slotIndex * SLOT_HEIGHT + 2,
+    height: Math.max(
+      (duration / step) * SLOT_HEIGHT - 4,
+      24
+    )
   };
 }
 
@@ -1990,6 +1956,170 @@ function resetRoomForm() {
   $('#room-error').textContent = '';
 }
 
+function populateGeneralBlockFormOptions() {
+  const form = $('#general-block-form');
+  if (!form) return;
+
+  form.elements.roomId.innerHTML = reservableRooms().map(room => `
+    <option value="${escape(room.id)}">
+      ${escape(room.name)} (${escape(defaultRoomShort(room))})
+    </option>
+  `).join('');
+
+  form.elements.start.innerHTML = '';
+  form.elements.end.innerHTML = '';
+
+  for (let value = dayStartMinutes(); value < dayEndMinutes(); value += 30) {
+    form.elements.start.insertAdjacentHTML(
+      'beforeend',
+      `<option value="${timeLabel(value)}">${timeLabel(value)}</option>`
+    );
+  }
+
+  for (let value = dayStartMinutes() + 30; value <= dayEndMinutes(); value += 30) {
+    form.elements.end.insertAdjacentHTML(
+      'beforeend',
+      `<option value="${timeLabel(value)}">${timeLabel(value)}</option>`
+    );
+  }
+}
+
+function updateGeneralBlockModeUI() {
+  const form = $('#general-block-form');
+  if (!form) return;
+
+  const mode = form.elements.blockMode?.value || 'hours';
+  const dateToWrap = $('#general-block-date-to-wrap');
+  const timeRow = $('#general-block-time-row');
+
+  if (dateToWrap) dateToWrap.hidden = mode !== 'days';
+  if (timeRow) timeRow.hidden = mode !== 'hours';
+
+  form.elements.dateTo.required = mode === 'days';
+
+  if (mode !== 'days') {
+    form.elements.dateTo.value = form.elements.date.value;
+  }
+
+  if (mode !== 'hours') {
+    form.elements.start.value = settings().startTime;
+    form.elements.end.value = settings().endTime;
+  }
+}
+
+function openGeneralBlock(values = {}) {
+  const form = $('#general-block-form');
+  if (!form) return;
+
+  form.reset();
+  $('#general-block-error').textContent = '';
+  populateGeneralBlockFormOptions();
+
+  const days = enabledDates();
+  const defaultDate = dateKey(days[selectedDay] || days[0] || new Date());
+
+  form.elements.blockMode.value = values.blockMode || 'hours';
+  form.elements.roomId.value = values.roomId || (
+    selectedRoom !== 'all' && reservableRooms().some(room => room.id === selectedRoom)
+      ? selectedRoom
+      : reservableRooms()[0]?.id || ''
+  );
+  form.elements.date.value = values.date || defaultDate;
+  form.elements.dateTo.value = values.dateTo || form.elements.date.value;
+  form.elements.start.value = values.start || settings().startTime;
+  form.elements.end.value = values.end || timeLabel(
+    Math.min(dayEndMinutes(), minutes(settings().startTime) + 60)
+  );
+  form.elements.reason.value = values.reason || '';
+
+  updateGeneralBlockModeUI();
+  $('#general-block-dialog').showModal();
+}
+
+function updateBlockModeUI() {
+  const form = $('#block-form');
+  if (!form) return;
+
+  const mode = form.elements.blockMode?.value || 'hours';
+  const dateToWrap = $('#block-date-to-wrap');
+  const timeRow = $('#block-time-row');
+
+  if (dateToWrap) dateToWrap.hidden = mode !== 'days';
+  if (timeRow) timeRow.hidden = mode !== 'hours';
+
+  if (form.elements.dateTo) {
+    form.elements.dateTo.required = mode === 'days';
+
+    if (mode !== 'days') {
+      form.elements.dateTo.value = form.elements.date.value;
+    }
+  }
+
+  if (mode !== 'hours') {
+    form.elements.start.value = settings().startTime;
+    form.elements.end.value = settings().endTime;
+  }
+}
+
+function buildRoomBlocks(form) {
+  const data = new FormData(form);
+  const mode = String(data.get('blockMode') || 'hours');
+  const roomId = String(data.get('roomId') || '');
+  const from = String(data.get('date') || '');
+  const reason = String(data.get('reason') || '').trim();
+
+  if (!roomId || !from || !reason) {
+    throw new Error('Completa la sala, la fecha y el motivo del bloqueo.');
+  }
+
+  const start = mode === 'hours'
+    ? String(data.get('start') || '')
+    : settings().startTime;
+
+  const end = mode === 'hours'
+    ? String(data.get('end') || '')
+    : settings().endTime;
+
+  if (mode === 'hours' || mode === 'day') {
+    return [{ roomId, date: from, start, end, reason }];
+  }
+
+  const to = String(data.get('dateTo') || '');
+
+  if (!to) {
+    throw new Error('Selecciona la fecha final del bloqueo.');
+  }
+
+  if (to < from) {
+    throw new Error('La fecha final no puede ser anterior a la inicial.');
+  }
+
+  const enabledDays = new Set(settings().enabledDays);
+  const blocks = [];
+  let cursor = parseDate(from);
+  const finalDate = parseDate(to);
+
+  while (cursor <= finalDate) {
+    if (enabledDays.has(cursor.getDay())) {
+      blocks.push({
+        roomId,
+        date: dateKey(cursor),
+        start: settings().startTime,
+        end: settings().endTime,
+        reason
+      });
+    }
+
+    cursor = addDays(cursor, 1);
+  }
+
+  if (!blocks.length) {
+    throw new Error('El periodo seleccionado no contiene días habilitados.');
+  }
+
+  return blocks;
+}
+
 function populateBlockFormOptions() {
   const form = $('#block-form');
 
@@ -2023,6 +2153,12 @@ function populateBlockFormOptions() {
   if (!form.elements.date.value) {
     form.elements.date.value = dateKey(new Date());
   }
+
+  if (form.elements.dateTo && !form.elements.dateTo.value) {
+    form.elements.dateTo.value = form.elements.date.value;
+  }
+
+  updateBlockModeUI();
 }
 
 async function loadAdminRooms() {
@@ -2101,16 +2237,8 @@ async function loadAdminUsers() {
   if (!authService.isOwner(currentUser)) return;
 
   try {
-    adminUsers = await repository.listAuthorizedUsers();
-
-    if (!adminUsers.some(user => user.email === OWNER_EMAIL)) {
-      adminUsers.unshift({
-        name: 'Iván Gutiérrez Bautista',
-        email: OWNER_EMAIL,
-        active: true,
-        virtualOwner: true
-      });
-    }
+    adminUsers =
+      await repository.listAuthorizedUsers();
 
     $('#users-list').innerHTML =
       adminUsers.map(user => {
@@ -2165,6 +2293,7 @@ function auditActionLabel(action) {
     USER_REACTIVATED: 'Reactivó usuario',
     SETTINGS_UPDATED: 'Cambió configuración',
     ROOM_BLOCK_CREATED: 'Creó bloqueo',
+    ROOM_BLOCK_SERIES_CREATED: 'Creó bloqueo de varios días',
     ROOM_BLOCK_UPDATED: 'Editó bloqueo',
     ROOM_BLOCK_REMOVED: 'Quitó bloqueo'
   };
@@ -2279,41 +2408,54 @@ function openAdmin() {
   openAdminTab(owner ? 'summary' : 'report');
 }
 
+function realtimeError(error) {
+  setOnlineState(false);
+  notice(
+    error?.message ||
+    'No se pudo sincronizar con Firebase.'
+  );
+}
+
+function updateRealtimeStatus() {
+  if (!isOnline) {
+    $('#sync-status').textContent = '● Sin conexión · modo consulta';
+    $('#sync-status').classList.remove('online');
+    return;
+  }
+
+  if (staticRealtimeReady && rangeRealtimeReady) {
+    $('#sync-status').textContent = '● En tiempo real';
+    $('#sync-status').classList.add('online');
+    return;
+  }
+
+  $('#sync-status').textContent = '● Sincronizando';
+  $('#sync-status').classList.remove('online');
+}
+
 function refreshVisibleRange() {
   if (!currentUser) return;
 
-  unsubscribeRealtime?.();
+  unsubscribeRangeRealtime?.();
+  unsubscribeRangeRealtime = null;
+  rangeRealtimeReady = false;
+  updateRealtimeStatus();
 
   const range = visibleRange();
 
-  $('#sync-status').textContent =
-    isOnline
-      ? '● Sincronizando'
-      : '● Sin conexión · modo consulta';
-
-  $('#sync-status').classList.remove('online');
-
-  unsubscribeRealtime =
+  unsubscribeRangeRealtime =
     repository.subscribeRange(
       range,
       nextState => {
         state = {
-          rooms: nextState.rooms,
+          ...state,
           bookings: nextState.bookings,
-          blocks: nextState.blocks,
-          settings: normalizeSettings(nextState.settings)
+          blocks: nextState.blocks
         };
 
+        rangeRealtimeReady = true;
         setOnlineState(navigator.onLine);
-
-        if (navigator.onLine) {
-          $('#sync-status').textContent = '● En tiempo real';
-          $('#sync-status').classList.add('online');
-          const syncedAt = new Date();
-          $('#last-sync').textContent = `Actualizado ${syncedAt.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-          $('#last-sync').dateTime = syncedAt.toISOString();
-        }
-
+        updateRealtimeStatus();
         render();
 
         if ($('#admin-dialog').open &&
@@ -2321,13 +2463,50 @@ function refreshVisibleRange() {
           renderReportRoomOptions();
         }
       },
-      error => {
-        setOnlineState(false);
-        notice(
-          error.message ||
-          'No se pudo sincronizar con Firebase.'
-        );
-      }
+      realtimeError
+    );
+}
+
+function startRealtime() {
+  unsubscribeStaticRealtime?.();
+  unsubscribeRangeRealtime?.();
+  unsubscribeStaticRealtime = null;
+  unsubscribeRangeRealtime = null;
+  staticRealtimeReady = false;
+  rangeRealtimeReady = false;
+  updateRealtimeStatus();
+
+  unsubscribeStaticRealtime =
+    repository.subscribeStatic(
+      nextState => {
+        const previousRange = visibleRange();
+
+        state = {
+          ...state,
+          rooms: nextState.rooms,
+          settings: normalizeSettings(nextState.settings)
+        };
+
+        const nextRange = visibleRange();
+        staticRealtimeReady = true;
+        setOnlineState(navigator.onLine);
+
+        if (!unsubscribeRangeRealtime ||
+            previousRange.from !== nextRange.from ||
+            previousRange.to !== nextRange.to) {
+          refreshVisibleRange();
+          return;
+        }
+
+        updateRealtimeStatus();
+        render();
+
+        if ($('#admin-dialog').open &&
+            activeAdminTab === 'report') {
+          renderReportRoomOptions();
+        }
+      },
+      realtimeError
     );
 }
 
@@ -2344,6 +2523,7 @@ function showApp(user) {
   document.body.classList.remove('auth-pending');
   $('#auth-screen').hidden = true;
   $('#user-chip').textContent = authService.username(user);
+  $('#block-room').hidden = false;
 
   $('#manage').textContent =
     authService.isOwner(user)
@@ -2380,8 +2560,8 @@ window.addEventListener('offline', () => {
 
 window.addEventListener('online', () => {
   setOnlineState(true);
+  updateRealtimeStatus();
   notice('Conexión recuperada.');
-  refreshVisibleRange();
 });
 
 $('#new').onclick = () => {
@@ -2403,38 +2583,21 @@ $('#room-tabs').onclick = event => {
 };
 
 $('#quick-filters').onclick = event => {
-  const button = event.target.closest('[data-view]');
+  const button =
+    event.target.closest('[data-view]');
+
   if (!button) return;
 
-  const view = button.dataset.view;
+  quickView = button.dataset.view;
 
-  if (view === 'today') {
-    const now = new Date();
-    week = monday(now);
-    selectedDay = dayIndexForDate(now);
-    quickView = enabledDates().some(date => dateKey(date) === dateKey(now))
-      ? 'today'
-      : 'week';
-
-    if (quickView !== 'today') {
-      notice('Hoy no es un día habilitado para reservaciones. Se muestra la semana actual.');
-    }
-
+  if (quickView === 'today' ||
+      quickView === 'week') {
+    week = monday(new Date());
+    selectedDay = 0;
     refreshVisibleRange();
-    return;
+  } else {
+    render();
   }
-
-  if (view === 'week') {
-    const now = new Date();
-    week = monday(now);
-    quickView = 'week';
-    selectedDay = dayIndexForDate(now);
-    refreshVisibleRange();
-    return;
-  }
-
-  quickView = view;
-  render();
 };
 
 $('#day-picker').onclick = event => {
@@ -2874,7 +3037,6 @@ window.addEventListener('pointerup', event => {
 // ---------------------------------------------------------
 
 $('#previous').onclick = () => {
-  initialCalendarScrollDone = true;
   week = addDays(week, -7);
   quickView = 'week';
   selectedDay = 0;
@@ -2882,7 +3044,6 @@ $('#previous').onclick = () => {
 };
 
 $('#next').onclick = () => {
-  initialCalendarScrollDone = true;
   week = addDays(week, 7);
   quickView = 'week';
   selectedDay = 0;
@@ -2890,24 +3051,24 @@ $('#next').onclick = () => {
 };
 
 $('#today').onclick = () => {
-  const now = new Date();
-  week = monday(now);
-  selectedDay = dayIndexForDate(now);
+  week = monday(new Date());
 
-  if (!enabledDates().some(date => dateKey(date) === dateKey(now))) {
+  const days = enabledDates();
+  const today = dateKey(new Date());
+  const todayIndex = days.findIndex(day =>
+    dateKey(day) === today
+  );
+
+  if (todayIndex < 0) {
     quickView = 'week';
+    selectedDay = 0;
     notice('Hoy no es un día habilitado para reservaciones.');
   } else {
     quickView = 'today';
+    selectedDay = todayIndex;
   }
 
   refreshVisibleRange();
-};
-
-$('#jump-date').onchange = event => {
-  const value = String(event.target.value || '');
-  if (!value) return;
-  goToDate(value, 'week');
 };
 
 
@@ -2982,9 +3143,16 @@ $('#booking-form').onsubmit = async event => {
       );
     }
 
+    const rangeBeforeSave = visibleRange();
+
     week = monday(
       parseDate(base.date)
     );
+
+    const rangeAfterSave = visibleRange();
+    const changedVisibleRange =
+      rangeBeforeSave.from !== rangeAfterSave.from ||
+      rangeBeforeSave.to !== rangeAfterSave.to;
 
     quickView = 'week';
     selectedRoom = 'all';
@@ -2997,7 +3165,9 @@ $('#booking-form').onsubmit = async event => {
         : 'Reservación guardada.'
     );
 
-    refreshVisibleRange();
+    if (changedVisibleRange) {
+      refreshVisibleRange();
+    }
   } catch (error) {
     $('#booking-error').textContent =
       error.message;
@@ -3059,7 +3229,6 @@ $('#cancel-booking').onclick = () => {
 
       $('#detail-dialog').close();
       notice('Reservación cancelada.');
-      refreshVisibleRange();
     },
     'Cancelar reservación'
   );
@@ -3081,7 +3250,6 @@ $('#cancel-series').onclick = () => {
 
       $('#detail-dialog').close();
       notice('Serie cancelada.');
-      refreshVisibleRange();
     },
     'Cancelar serie'
   );
@@ -3103,7 +3271,6 @@ $('#restore-booking').onclick = () => {
 
       $('#detail-dialog').close();
       notice('Reservación restaurada.');
-      refreshVisibleRange();
 
       if ($('#admin-dialog').open) {
         await loadAdminReservations();
@@ -3140,6 +3307,17 @@ $('#confirm-action').onclick = async event => {
 // ---------------------------------------------------------
 // ADMINISTRACIÓN
 // ---------------------------------------------------------
+
+$('#block-room').onclick = () => {
+  if (!currentUser) return;
+
+  if (!isOnline) {
+    notice('Sin conexión: no se pueden bloquear salas.');
+    return;
+  }
+
+  openGeneralBlock();
+};
 
 $('#manage').onclick = openAdmin;
 
@@ -3241,7 +3419,6 @@ $('#admin-res-list').onclick = async event => {
 
         notice('Reservación cancelada.');
         await loadAdminReservations();
-        refreshVisibleRange();
       },
       'Cancelar reservación'
     );
@@ -3262,7 +3439,6 @@ $('#admin-res-list').onclick = async event => {
 
         notice('Reservación restaurada.');
         await loadAdminReservations();
-        refreshVisibleRange();
       },
       'Restaurar'
     );
@@ -3305,7 +3481,6 @@ $('#room-form').onsubmit = async event => {
     resetRoomForm();
     notice('Sala guardada.');
     await loadAdminRooms();
-    refreshVisibleRange();
   } catch (error) {
     $('#room-error').textContent =
       error.message;
@@ -3380,7 +3555,6 @@ $('#panel-rooms').onclick = event => {
 
         notice('Sala desactivada.');
         await loadAdminRooms();
-        refreshVisibleRange();
       },
       'Desactivar'
     );
@@ -3405,7 +3579,6 @@ $('#panel-rooms').onclick = event => {
 
         notice('Sala reactivada.');
         await loadAdminRooms();
-        refreshVisibleRange();
       },
       'Reactivar'
     );
@@ -3429,10 +3602,72 @@ $('#panel-rooms').onclick = event => {
 
         notice('Bloqueo eliminado.');
         await loadAdminRooms();
-        refreshVisibleRange();
       },
       'Quitar bloqueo'
     );
+  }
+};
+
+$('#general-block-mode').onchange = updateGeneralBlockModeUI;
+
+$('#general-block-form').elements.date.onchange = event => {
+  const form = $('#general-block-form');
+
+  if (!form.elements.dateTo.value || form.elements.dateTo.value < event.target.value) {
+    form.elements.dateTo.value = event.target.value;
+  }
+};
+
+$('#general-block-form').onsubmit = async event => {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const button = form.querySelector('[type=submit]');
+  button.disabled = true;
+  $('#general-block-error').textContent = '';
+
+  try {
+    ensureOnline();
+
+    const blocks = buildRoomBlocks(form);
+
+    if (blocks.length === 1) {
+      await repository.saveRoomBlock(
+        blocks[0],
+        currentUser?.email
+      );
+    } else {
+      await repository.saveRoomBlocks(
+        blocks,
+        currentUser?.email
+      );
+    }
+
+    $('#general-block-dialog').close();
+
+    notice(
+      blocks.length === 1
+        ? 'Sala bloqueada.'
+        : `${blocks.length} días bloqueados.`
+    );
+
+  } catch (error) {
+    $('#general-block-error').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+$('#block-mode').onchange = updateBlockModeUI;
+
+$('#block-form').elements.date.onchange = event => {
+  const form = $('#block-form');
+
+  if (
+    form.elements.dateTo &&
+    (!form.elements.dateTo.value || form.elements.dateTo.value < event.target.value)
+  ) {
+    form.elements.dateTo.value = event.target.value;
   }
 };
 
@@ -3440,8 +3675,7 @@ $('#block-form').onsubmit = async event => {
   event.preventDefault();
 
   const form = event.currentTarget;
-  const button =
-    form.querySelector('[type=submit]');
+  const button = form.querySelector('[type=submit]');
 
   button.disabled = true;
   $('#block-error').textContent = '';
@@ -3449,29 +3683,32 @@ $('#block-form').onsubmit = async event => {
   try {
     ensureOnline();
 
-    const data = new FormData(form);
+    const blocks = buildRoomBlocks(form);
 
-    await repository.saveRoomBlock(
-      {
-        id: data.get('id'),
-        roomId: data.get('roomId'),
-        date: data.get('date'),
-        start: data.get('start'),
-        end: data.get('end'),
-        reason: data.get('reason')
-      },
-      currentUser?.email
-    );
+    if (blocks.length === 1) {
+      await repository.saveRoomBlock(
+        blocks[0],
+        currentUser?.email
+      );
+    } else {
+      await repository.saveRoomBlocks(
+        blocks,
+        currentUser?.email
+      );
+    }
 
     form.reset();
     populateBlockFormOptions();
 
-    notice('Bloqueo agregado.');
+    notice(
+      blocks.length === 1
+        ? 'Bloqueo agregado.'
+        : `${blocks.length} días bloqueados.`
+    );
+
     await loadAdminRooms();
-    refreshVisibleRange();
   } catch (error) {
-    $('#block-error').textContent =
-      error.message;
+    $('#block-error').textContent = error.message;
   } finally {
     button.disabled = false;
   }
@@ -3741,8 +3978,12 @@ $('#new').disabled = true;
 showAuth('Comprobando sesión…');
 
 authService.onChange(async user => {
-  unsubscribeRealtime?.();
-  unsubscribeRealtime = null;
+  unsubscribeStaticRealtime?.();
+  unsubscribeRangeRealtime?.();
+  unsubscribeStaticRealtime = null;
+  unsubscribeRangeRealtime = null;
+  staticRealtimeReady = false;
+  rangeRealtimeReady = false;
   currentUser = null;
   clearCurrentGestures();
 
@@ -3773,12 +4014,9 @@ authService.onChange(async user => {
       return;
     }
 
-    state.settings =
-      await repository.getSettings();
-
     showApp(user);
     setOnlineState(navigator.onLine);
-    refreshVisibleRange();
+    startRealtime();
   } catch (error) {
     showAuth(
       error.message ||

@@ -7,38 +7,12 @@
   <meta name="description" content="Agenda semanal de reservación de salas audiovisuales de la División Industrial.">
   <title>Reservación de Salas Audiovisuales · División Industrial</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=7.0">
+  <link rel="stylesheet" href="styles.css?v=6.3">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script type="module" src="app.js?v=7.0"></script>
+  <script type="module" src="app.js?v=6.3"></script>
 </head>
 
 <body class="auth-pending">
-  <a class="skip-link" href="#calendar">Saltar al calendario</a>
-  <div id="fatal-banner" class="fatal-banner" role="alert" hidden></div>
-  <script>
-    (() => {
-      const showFatal = message => {
-        const render = () => {
-          const banner = document.getElementById('fatal-banner');
-          if (!banner) return;
-          banner.textContent = 'La aplicación encontró un problema: ' + message + '. Recarga la página; si continúa, conserva una captura del mensaje.';
-          banner.hidden = false;
-        };
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', render, { once: true });
-        } else {
-          render();
-        }
-      };
-      window.addEventListener('error', event => {
-        if (event && event.message) showFatal(event.message);
-      });
-      window.addEventListener('unhandledrejection', event => {
-        const value = event && event.reason;
-        showFatal((value && value.message) || String(value || 'error inesperado'));
-      });
-    })();
-  </script>
 
   <section id="auth-screen" class="auth-screen" aria-live="polite">
     <div class="auth-card">
@@ -64,10 +38,7 @@
     </a>
 
     <div class="top-actions">
-      <span class="sync-cluster">
-        <span id="sync-status" class="sync-status" title="Estado de sincronización">● Sincronizando</span>
-        <small id="last-sync" class="last-sync">Esperando datos…</small>
-      </span>
+      <span id="sync-status" class="sync-status" title="Estado de sincronización">● Sincronizando</span>
       <span id="user-chip" class="user-chip"></span>
       <button id="manage" class="quiet">Administración</button>
       <button id="sign-out" class="quiet">Salir</button>
@@ -81,7 +52,10 @@
         <h1>Un espacio para cada actividad.</h1>
         <p class="subtitle">Consulta la disponibilidad y reserva tu sala.</p>
       </div>
-      <button id="new" class="primary">＋ Nueva reservación</button>
+      <div class="intro-actions">
+        <button id="block-room" class="quiet">Bloquear sala</button>
+        <button id="new" class="primary">＋ Nueva reservación</button>
+      </div>
     </section>
 
     <section class="workspace" aria-label="Calendario de salas">
@@ -102,15 +76,10 @@
           <button type="button" data-view="week" aria-pressed="true">Esta semana</button>
         </div>
 
-        <label class="date-jump">
-          <span>Ir a fecha</span>
-          <input id="jump-date" type="date" aria-label="Ir a una fecha">
-        </label>
-
         <div class="navigation">
-          <button id="previous" aria-label="Semana anterior" title="Semana anterior">←</button>
-          <button id="today" title="Ir al día de hoy">Hoy</button>
-          <button id="next" aria-label="Semana siguiente" title="Semana siguiente">→</button>
+          <button id="previous" aria-label="Semana anterior">←</button>
+          <button id="today">Hoy</button>
+          <button id="next" aria-label="Semana siguiente">→</button>
         </div>
       </div>
 
@@ -128,7 +97,6 @@
     <footer class="page-footer">
       <span>Reservación de Salas Audiovisuales · División Industrial</span>
       <span>Sitio elaborado por Iván Gutiérrez Bautista · Jefe de Unidad de Coordinación Académica · División Industrial · Turno Matutino</span>
-      <span id="app-version" class="app-version"></span>
     </footer>
 
     <p id="notice" role="status" aria-live="polite"></p>
@@ -147,6 +115,32 @@
       </div>
 
       <input type="hidden" name="id">
+
+      <label>
+        Nombre del evento
+        <textarea
+          name="activity"
+          required
+          rows="2"
+          placeholder="Ej. Toma de protesta, reunión de academia, presentación de proyecto..."></textarea>
+      </label>
+
+      <label>
+        Maestro o persona que aparta
+        <input
+          name="teacher"
+          required
+          autocomplete="name"
+          placeholder="Nombre de la persona responsable">
+      </label>
+
+      <label>
+        Grupo o área
+        <input
+          name="group"
+          required
+          placeholder="Ej. IMMI8, Dirección Industrial, Academia...">
+      </label>
 
       <label>
         Sala
@@ -168,21 +162,6 @@
           <select name="end" required></select>
         </label>
       </div>
-
-      <label>
-        Nombre del maestro
-        <input name="teacher" required maxlength="160" autocomplete="name">
-      </label>
-
-      <label>
-        Grupo
-        <input name="group" required maxlength="80" placeholder="Ej. IDGS-43">
-      </label>
-
-      <label>
-        Actividad
-        <textarea name="activity" required maxlength="500" rows="2" placeholder="¿Qué actividad se realizará?"></textarea>
-      </label>
 
       <section class="color-picker-box" aria-labelledby="booking-color-title">
         <div class="color-picker-heading">
@@ -218,6 +197,76 @@
       <div class="actions">
         <button type="button" data-close>Cancelar</button>
         <button class="primary" type="submit" data-mutation>Guardar reservación</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <!-- BLOQUEO GENERAL DE SALA -->
+  <dialog id="general-block-dialog" aria-labelledby="general-block-title">
+    <form id="general-block-form">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">BLOQUEO DE SALA</p>
+          <h2 id="general-block-title">Bloquear sala</h2>
+        </div>
+        <button type="button" class="close" data-close aria-label="Cerrar">×</button>
+      </div>
+
+      <p class="dialog-help">
+        Usa esta opción cuando la sala deba quedar indisponible sin crear una reservación.
+      </p>
+
+      <label>
+        Tipo de bloqueo
+        <select name="blockMode" id="general-block-mode" required>
+          <option value="hours">Algunas horas</option>
+          <option value="day">Todo el día</option>
+          <option value="days">Varios días completos</option>
+        </select>
+      </label>
+
+      <label>
+        Sala
+        <select name="roomId" required></select>
+      </label>
+
+      <div class="form-row">
+        <label>
+          Fecha inicial
+          <input type="date" name="date" required>
+        </label>
+
+        <label id="general-block-date-to-wrap" hidden>
+          Fecha final
+          <input type="date" name="dateTo">
+        </label>
+      </div>
+
+      <div class="form-row" id="general-block-time-row">
+        <label>
+          Desde
+          <select name="start" required></select>
+        </label>
+        <label>
+          Hasta
+          <select name="end" required></select>
+        </label>
+      </div>
+
+      <label>
+        Motivo
+        <input
+          name="reason"
+          required
+          placeholder="Ej. Evento institucional, mantenimiento, capacitación...">
+      </label>
+
+      <p class="form-error" id="general-block-error" role="alert"></p>
+
+      <div class="actions">
+        <button type="button" data-close>Cancelar</button>
+        <button class="primary" type="submit" data-mutation>Bloquear sala</button>
       </div>
     </form>
   </dialog>
@@ -346,13 +395,13 @@
         <h4 id="room-form-title">Agregar sala</h4>
 
         <div class="form-row">
-          <label>Nombre<input name="name" required maxlength="160"></label>
+          <label>Nombre<input name="name" required></label>
           <label>Abreviatura<input name="short" maxlength="12" required></label>
         </div>
 
         <div class="form-row">
-          <label>Edificio<input name="building" maxlength="40" placeholder="Ej. F"></label>
-          <label>Planta<input name="floor" maxlength="40" placeholder="Alta / Baja"></label>
+          <label>Edificio<input name="building" placeholder="Ej. F"></label>
+          <label>Planta<input name="floor" placeholder="Alta / Baja"></label>
           <label>Capacidad<input name="capacity" type="number" min="0" step="1"></label>
         </div>
 
@@ -365,10 +414,10 @@
               <option value="out_of_service">Fuera de servicio</option>
             </select>
           </label>
-          <label>Equipamiento<input name="equipment" maxlength="300" placeholder="Proyector, audio, HDMI"></label>
+          <label>Equipamiento<input name="equipment" placeholder="Proyector, audio, HDMI"></label>
         </div>
 
-        <label>Observaciones<textarea name="notes" maxlength="1000" rows="2"></textarea></label>
+        <label>Observaciones<textarea name="notes" rows="2"></textarea></label>
 
         <div class="actions">
           <button type="button" id="room-form-reset">Limpiar</button>
@@ -387,17 +436,44 @@
 
         <form id="block-form">
           <input type="hidden" name="id">
+
+          <label>
+            Tipo de bloqueo
+            <select name="blockMode" id="block-mode" required>
+              <option value="hours">Algunas horas</option>
+              <option value="day">Todo el día</option>
+              <option value="days">Varios días completos</option>
+            </select>
+          </label>
+
+          <label>
+            Sala
+            <select name="roomId" required></select>
+          </label>
+
           <div class="form-row">
-            <label>Sala<select name="roomId" required></select></label>
-            <label>Fecha<input type="date" name="date" required></label>
+            <label>
+              Fecha inicial
+              <input type="date" name="date" required>
+            </label>
+            <label id="block-date-to-wrap" hidden>
+              Fecha final
+              <input type="date" name="dateTo">
+            </label>
           </div>
-          <div class="form-row">
+
+          <div class="form-row" id="block-time-row">
             <label>Desde<select name="start" required></select></label>
             <label>Hasta<select name="end" required></select></label>
           </div>
-          <label>Motivo<input name="reason" required maxlength="240" placeholder="Ej. Mantenimiento del proyector"></label>
+
+          <label>
+            Motivo
+            <input name="reason" required placeholder="Ej. Mantenimiento, evento institucional, capacitación...">
+          </label>
+
           <div class="actions">
-            <button class="primary" type="submit" data-mutation>Agregar bloqueo</button>
+            <button class="primary" type="submit" data-mutation>Aplicar bloqueo</button>
           </div>
           <p class="form-error" id="block-error" role="alert"></p>
         </form>
@@ -419,7 +495,7 @@
 
       <form id="user-form" class="admin-card admin-form">
         <div class="form-row">
-          <label>Nombre<input name="name" required maxlength="160" placeholder="Nombre completo"></label>
+          <label>Nombre<input name="name" required placeholder="Nombre completo"></label>
           <label>Correo<input type="email" name="email" required placeholder="usuario@uteq.edu.mx"></label>
         </div>
         <button class="primary" type="submit" data-mutation>＋ Agregar o reactivar usuario</button>
@@ -550,7 +626,7 @@
 
       <article class="admin-card backup-card">
         <h4>Seguridad / Respaldo</h4>
-        <p>Descarga una copia JSON de salas, reservaciones, usuarios, configuración, bloqueos y bitácora. Esta función no modifica ni restaura Firestore.</p>
+        <p>Descarga una copia JSON. Esta función no modifica ni restaura Firestore.</p>
         <button type="button" id="download-backup">↓ Descargar respaldo</button>
         <p id="backup-status" class="report-preview"></p>
       </article>
