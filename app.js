@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS, normalizeSettings, minutes, timeLabel, dateKey, parse
 import { repository } from './storage.js?v=6.4';
 import { authService, OWNER_EMAIL } from './firebase.js?v=4.1';
 
-// V6.4 · Carga semanal puntual, candados por hora y sincronización mínima entre usuarios.
+// V6.4.1 · Carga semanal puntual, candados por hora y sincronización mínima entre usuarios.
 
 // Densidad visual del calendario: cada bloque representa 30 minutos.
 const SLOT_HEIGHT = 48;
@@ -2433,6 +2433,25 @@ function realtimeError(error) {
   );
 }
 
+// V6.4.1 · La presencia/multiusuario es auxiliar.
+// Un fallo de permisos en presencia NUNCA debe bloquear el acceso a la agenda.
+function collaborationError(error) {
+  console.warn('Sincronización multiusuario no disponible:', error);
+  stopCollaborationLocal();
+  if (isOnline) {
+    $('#sync-status').textContent = '● Modo eficiente · sincronización puntual no disponible';
+    $('#sync-status').classList.remove('online');
+  }
+}
+
+async function signalSuccessfulAgendaMutation() {
+  try {
+    await activatePresence();
+  } catch (error) {
+    collaborationError(error);
+  }
+}
+
 function updateRealtimeStatus() {
   if (!isOnline) {
     $('#sync-status').textContent = '● Sin conexión · modo consulta';
@@ -2537,7 +2556,7 @@ function startAgendaChanges() {
   unsubscribeAgendaChanges = repository.subscribeAgendaChanges(
     Date.now() - 5000,
     applyRemoteChanges,
-    realtimeError
+    collaborationError
   );
   updateRealtimeStatus();
 }
@@ -2601,7 +2620,7 @@ async function activatePresence() {
   if (!unsubscribePresence) {
     unsubscribePresence = repository.subscribePresence(
       handlePresence,
-      realtimeError
+      collaborationError
     );
   }
 
@@ -2657,6 +2676,9 @@ async function refreshVisibleRange() {
 }
 
 async function startRealtime() {
+  // V6.4.1: al entrar solo se carga lo necesario.
+  // NO se escribe presencia ni se abre sincronización multiusuario hasta
+  // que exista una mutación de agenda confirmada por Firestore.
   stopCollaborationLocal();
   $('#sync-status').textContent = '● Cargando datos';
   $('#sync-status').classList.remove('online');
@@ -2669,7 +2691,7 @@ async function startRealtime() {
   };
 
   await refreshVisibleRange();
-  await activatePresence();
+  updateRealtimeStatus();
   render();
 }
 
@@ -2724,17 +2746,13 @@ window.addEventListener('offline', () => {
 
 window.addEventListener('online', () => {
   setOnlineState(true);
-  if (currentUser) void activatePresence();
   updateRealtimeStatus();
   notice('Conexión recuperada.');
 });
 
-// La actividad local solo reinicia el temporizador local; no escribe ni relee Firebase.
-for (const eventName of ['pointermove', 'keydown', 'touchstart']) {
-  document.addEventListener(eventName, () => {
-    if (localPresenceActive) armPresenceIdleTimer();
-  }, { passive: true });
-}
+// V6.4.1: mover el mouse, escribir o tocar la pantalla NO genera ni prolonga
+// presencia en Firebase. El temporizador de 2.5 min solo se reinicia después
+// de una operación de agenda guardada correctamente.
 
 $('#new').onclick = () => {
   if (!isOnline) {
@@ -2982,7 +3000,6 @@ window.addEventListener('pointerup', async event => {
   try {
     ensureOnline();
 
-    await ensureSyncChannel();
     const result = await repository.saveBooking(
       {
         ...active.booking,
@@ -2995,6 +3012,7 @@ window.addEventListener('pointerup', async event => {
       state.settings
     );
     upsertBookingLocal(result.booking);
+    void signalSuccessfulAgendaMutation();
     render();
 
     notice(
@@ -3293,7 +3311,6 @@ $('#booking-form').onsubmit = async event => {
 
     const base = bookings[0];
 
-    await ensureSyncChannel();
 
     if (bookings.length > 1) {
       const result = await repository.saveBookings(
@@ -3310,6 +3327,8 @@ $('#booking-form').onsubmit = async event => {
       );
       upsertBookingLocal(result.booking);
     }
+
+    void signalSuccessfulAgendaMutation();
 
     const rangeBeforeSave = visibleRange();
 
@@ -3392,12 +3411,12 @@ $('#cancel-booking').onclick = () => {
     async () => {
       ensureOnline();
 
-      await ensureSyncChannel();
-      const result = await repository.cancelBooking(
+        const result = await repository.cancelBooking(
         currentBooking.id,
         currentUser?.email
       );
       upsertBookingLocal(result.booking);
+      void signalSuccessfulAgendaMutation();
       render();
 
       $('#detail-dialog').close();
@@ -3416,12 +3435,12 @@ $('#cancel-series').onclick = () => {
     async () => {
       ensureOnline();
 
-      await ensureSyncChannel();
-      const result = await repository.cancelSeries(
+        const result = await repository.cancelSeries(
         currentBooking.seriesId,
         currentUser?.email
       );
       for (const booking of result.bookings || []) upsertBookingLocal(booking);
+      void signalSuccessfulAgendaMutation();
       render();
 
       $('#detail-dialog').close();
@@ -3440,12 +3459,12 @@ $('#restore-booking').onclick = () => {
     async () => {
       ensureOnline();
 
-      await ensureSyncChannel();
-      const result = await repository.restoreBooking(
+        const result = await repository.restoreBooking(
         currentBooking.id,
         currentUser?.email
       );
       upsertBookingLocal(result.booking);
+      void signalSuccessfulAgendaMutation();
       render();
 
       $('#detail-dialog').close();
@@ -3591,12 +3610,12 @@ $('#admin-res-list').onclick = async event => {
       async () => {
         ensureOnline();
 
-        await ensureSyncChannel();
-        const result = await repository.cancelBooking(
+            const result = await repository.cancelBooking(
           booking.id,
           currentUser?.email
         );
         upsertBookingLocal(result.booking);
+        void signalSuccessfulAgendaMutation();
         render();
 
         notice('Reservación cancelada.');
@@ -3614,12 +3633,12 @@ $('#admin-res-list').onclick = async event => {
       async () => {
         ensureOnline();
 
-        await ensureSyncChannel();
-        const result = await repository.restoreBooking(
+            const result = await repository.restoreBooking(
           booking.id,
           currentUser?.email
         );
         upsertBookingLocal(result.booking);
+        void signalSuccessfulAgendaMutation();
         render();
 
         notice('Reservación restaurada.');
@@ -3783,12 +3802,12 @@ $('#panel-rooms').onclick = event => {
       async () => {
         ensureOnline();
 
-        await ensureSyncChannel();
-        const removed = await repository.deleteRoomBlock(
+            const removed = await repository.deleteRoomBlock(
           id,
           currentUser?.email
         );
         state.blocks = state.blocks.filter(item => item.id !== id);
+        void signalSuccessfulAgendaMutation();
         render();
 
         notice('Bloqueo eliminado.');
@@ -3822,7 +3841,6 @@ $('#general-block-form').onsubmit = async event => {
 
     const blocks = buildRoomBlocks(form);
 
-    await ensureSyncChannel();
     if (blocks.length === 1) {
       const saved = await repository.saveRoomBlock(
         blocks[0],
@@ -3836,6 +3854,7 @@ $('#general-block-form').onsubmit = async event => {
       );
       for (const block of saved) upsertBlockLocal(block);
     }
+    void signalSuccessfulAgendaMutation();
     render();
 
     $('#general-block-dialog').close();
@@ -3880,7 +3899,6 @@ $('#block-form').onsubmit = async event => {
 
     const blocks = buildRoomBlocks(form);
 
-    await ensureSyncChannel();
     if (blocks.length === 1) {
       const saved = await repository.saveRoomBlock(
         blocks[0],
@@ -3894,6 +3912,7 @@ $('#block-form').onsubmit = async event => {
       );
       for (const block of saved) upsertBlockLocal(block);
     }
+    void signalSuccessfulAgendaMutation();
     render();
 
     form.reset();
@@ -4063,7 +4082,6 @@ $('#settings-form').onsubmit = async event => {
 
     const data = new FormData(form);
 
-    await ensureSyncChannel();
 
     const saved =
       await repository.saveSettings(

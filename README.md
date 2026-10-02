@@ -1,3 +1,7 @@
+## Hotfix V6.4.1
+
+Este paquete corrige el bloqueo de acceso por permisos en el subsistema auxiliar de presencia. La agenda ya no activa presence al iniciar; solo después de una operación de agenda confirmada. No migra ni elimina datos.
+
 # Agenda Audiovisuales · V6.4
 
 Versión acumulativa preparada directamente sobre el código publicado que se entregó para esta revisión.

@@ -1,0 +1,46 @@
+AGENDA AUDIOVISUALES · V6.4.1 HOTFIX DE ACCESO
+===============================================
+
+PROBLEMA CORREGIDO
+------------------
+V6.4 activaba la colección auxiliar `presence` durante el inicio de sesión.
+Si las reglas publicadas todavía no incluían `presence`/`hourLocks`, o si el
+navegador conservaba una combinación de archivos/reglas de distinta versión,
+el fallo auxiliar terminaba dentro del flujo principal de autenticación y la
+pantalla quedaba en “Missing or insufficient permissions”.
+
+V6.4.1 separa completamente ambos flujos:
+- Entrar a la agenda NO escribe `presence`.
+- Entrar a la agenda NO abre listeners multiusuario.
+- Se cargan únicamente salas, configuración y la semana visible.
+- La presencia se activa solamente DESPUÉS de una operación de agenda
+  confirmada por Firestore (guardar/mover/cancelar/restaurar/bloquear).
+- Un fallo de `presence` nunca vuelve a bloquear el acceso a la agenda.
+- Mover el mouse, escribir o hacer clic no activa ni prolonga presencia.
+- El umbral de colaboración/inactividad sigue siendo 2 min 30 s desde la
+  última operación de agenda confirmada.
+
+ACTUALIZACIÓN RECOMENDADA
+-------------------------
+1. Firebase Console > Firestore Database > Reglas:
+   sustituye TODO por `firestore.rules` de este paquete y pulsa PUBLICAR.
+2. En GitHub sustituye como mínimo:
+   - index.html
+   - app.js
+3. Si quieres dejar el repositorio exactamente igual al paquete, puedes
+   sustituir también los demás archivos incluidos. No cambia datos existentes.
+4. NO es necesario cambiar `.github/workflows/deploy-pages.yml`.
+5. Espera el despliegue de GitHub Pages y haz Ctrl+F5 una vez.
+6. Inicia sesión. La agenda debe abrir aunque todavía no exista otro usuario.
+7. Crea una reservación de prueba y confirma que aparece localmente.
+
+DATOS
+-----
+No hay migración masiva, borrado ni reescritura de reservas existentes.
+Se conservan bookings, rooms, authorizedUsers, locks, hourLocks, roomBlocks,
+auditLogs, settings y system.
+
+COMPATIBILIDAD
+--------------
+Las reglas V6.4.1 mantienen `locks` legacy disponibles durante la transición,
+aunque los clientes V6.4.1 usan `hourLocks` como mecanismo principal.

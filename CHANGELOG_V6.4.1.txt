@@ -1,0 +1,13 @@
+V6.4.1 · HOTFIX
+================
+- Corrige “Missing or insufficient permissions” al iniciar cuando el fallo
+  provenía del subsistema auxiliar de presencia.
+- Presence deja de activarse al iniciar sesión o al recuperar conexión.
+- Presence se activa únicamente después de una mutación de agenda confirmada.
+- La actividad de mouse/teclado/táctil no reinicia el temporizador.
+- Un error en colaboración multiusuario ya no marca la app como offline ni
+  expulsa al usuario a la pantalla de autenticación.
+- Se mantienen 2 min 30 s como ventana de actividad colaborativa.
+- `locks` legacy conserva permisos compatibles durante la transición.
+- Cache-busting de app/styles actualizado a 6.4.1.
+- Sin cambios destructivos de datos.

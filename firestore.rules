@@ -129,15 +129,33 @@ service cloud.firestore {
     }
 
     // --------------------------------------------------
-    // CANDADOS LEGACY DE 30 MINUTOS (SOLO COMPATIBILIDAD)
+    // CANDADOS LEGACY DE 30 MINUTOS · COMPATIBILIDAD SEGURA
     // --------------------------------------------------
     match /locks/{lockId} {
       allow read: if isAuthorized();
 
-      // V6.4 deja de crear o actualizar estos documentos.
-      // Se conservan para validar datos históricos durante la transición.
-      allow create, update: if false;
-      allow delete: if false;
+      // V6.4.1 usa hourLocks para las operaciones nuevas, pero conserva
+      // compatibilidad de escritura con clientes V6.1/V6.3 durante la transición.
+      // Esto evita bloquear una agenda todavía abierta en otra computadora.
+      allow create, update: if isOwner()
+        || (
+          isAuthorized()
+          && (
+            !request.resource.data.keys().hasAny(['type'])
+            || request.resource.data.type == 'booking'
+            || request.resource.data.type == 'roomBlock'
+          )
+        );
+
+      allow delete: if isOwner()
+        || (
+          isAuthorized()
+          && (
+            !resource.data.keys().hasAny(['type'])
+            || resource.data.type == 'booking'
+            || resource.data.type == 'roomBlock'
+          )
+        );
     }
 
     // --------------------------------------------------
