@@ -1,0 +1,30 @@
+CONFIGURACIÓN DE REALTIME DATABASE · V6.5
+==========================================
+
+Realtime Database NO sustituye Firestore.
+Solo se usa para:
+- presencia activa/inactiva;
+- detectar si existe otro usuario activo;
+- avisar qué booking o roomBlock cambió.
+
+No se guardan reservaciones completas en Realtime Database.
+Firestore sigue siendo la fuente única de verdad.
+
+PASOS
+1. Firebase Console > agenda-audiovisuales-din.
+2. Build > Realtime Database.
+3. Crear base de datos.
+4. Abrir la pestaña Reglas.
+5. Copiar TODO database.rules.json y publicar.
+6. Revisar la URL que Firebase muestra en la parte superior de Realtime Database.
+
+URL CONFIGURADA EN V6.5:
+https://agenda-audiovisuales-din-default-rtdb.firebaseio.com
+
+Si la URL de tu consola es distinta:
+- abre realtime.js;
+- busca REALTIME_DATABASE_URL;
+- reemplaza solamente la URL entre comillas;
+- guarda y vuelve a publicar en GitHub.
+
+No cambies firebase.js para este paso.

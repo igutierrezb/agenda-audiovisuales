@@ -1,0 +1,25 @@
+{
+  "rules": {
+    "presence": {
+      ".read": "auth != null && auth.token.email_verified == true",
+      "$uid": {
+        "$sessionId": {
+          ".write": "auth != null && auth.token.email_verified == true && auth.uid == $uid"
+        }
+      }
+    },
+    "agendaSignals": {
+      "$date": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".indexOn": ["ts"],
+        "$signalId": {
+          ".write": "auth != null && auth.token.email_verified == true && newData.child('actorUid').val() == auth.uid"
+        }
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
