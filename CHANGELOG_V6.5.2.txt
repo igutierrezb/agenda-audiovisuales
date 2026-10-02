@@ -1,0 +1,20 @@
+AGENDA AUDIOVISUALES DIN · V6.5.2
+
+MEJORA VISUAL Y CONSOLIDACIÓN DE ASSETS
+- Todas las referencias de identidad DIN apuntan a la carpeta assets/.
+- Portada de acceso rediseñada en composición de dos paneles para escritorio y una sola tarjeta en móvil.
+- Mayor presencia del logotipo horizontal DIN y del isotipo como marca gráfica secundaria.
+- Encabezado principal rediseñado con wordmark DIN y nombre de la aplicación.
+- Hero de la agenda simplificado con jerarquía más clara, microinformación de horario y mejor contraste.
+- Workspace, pestañas, toolbar, botones y pie refinados para una apariencia institucional más uniforme.
+- Se mantiene la paleta azul/cian/acero de la identidad DIN.
+
+PRESERVACIÓN
+- app.js: sin cambios funcionales.
+- storage.js: sin cambios.
+- realtime.js: sin cambios.
+- firebase.js: sin cambios.
+- core.js: sin cambios.
+- firestore.rules: sin cambios.
+- database.rules.json: sin cambios.
+- No se migran, borran ni reescriben reservaciones o datos existentes.

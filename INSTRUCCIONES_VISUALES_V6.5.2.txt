@@ -1,0 +1,22 @@
+AGENDA AUDIOVISUALES DIN · V6.5.2
+
+INSTALACIÓN EN GITHUB
+1. Abre la carpeta AgendaV65_2_DIN.
+2. Sube TODO su contenido a la raíz del repositorio; no subas la carpeta contenedora.
+3. Conserva la carpeta assets/ como carpeta real del repositorio.
+4. Reemplaza index.html, styles.css y manifest.webmanifest por los de esta versión.
+5. También puedes subir el resto de los archivos del paquete para que el repositorio quede exactamente igual a esta distribución.
+6. No necesitas modificar reglas de Firestore ni de Realtime Database para esta revisión visual.
+
+RUTAS DE IDENTIDAD
+assets/logo-din-horizontal.png
+assets/icon-din.png
+assets/favicon.ico
+assets/favicon-16x16.png
+assets/favicon-32x32.png
+assets/apple-touch-icon.png
+assets/icon-192.png
+assets/icon-512.png
+
+IMPORTANTE
+La carpeta assets/ ya viene incluida en este paquete. Si GitHub se usa con Upload files, verifica antes de confirmar el commit que aparezca assets/ con sus archivos.

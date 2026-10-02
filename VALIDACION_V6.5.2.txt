@@ -1,0 +1,30 @@
+AGENDA AUDIOVISUALES DIN · V6.5.2
+VALIDACIÓN TÉCNICA
+
+RESULTADOS
+- app.js: sintaxis correcta.
+- storage.js: sintaxis correcta.
+- realtime.js: sintaxis correcta.
+- firebase.js: sintaxis correcta.
+- core.js: sintaxis correcta.
+- Pruebas core: 5/5 correctas.
+- Rutas locales de index.html y styles.css: sin archivos faltantes.
+- Recursos DIN: todas las referencias apuntan a assets/.
+
+PRESERVACIÓN COMPROBADA POR HASH RESPECTO A V6.5.1
+- app.js: sin cambios.
+- storage.js: sin cambios.
+- realtime.js: sin cambios.
+- firebase.js: sin cambios.
+- core.js: sin cambios.
+- firestore.rules: sin cambios.
+- database.rules.json: sin cambios.
+
+ARCHIVOS DE PRESENTACIÓN ACTUALIZADOS
+- index.html
+- styles.css
+- manifest.webmanifest
+- package.json (solo número de versión)
+- README.md / documentación de versión
+
+Esta revisión no requiere modificar reglas de Firestore ni Realtime Database.

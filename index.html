@@ -11,33 +11,56 @@
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=6.5.1">
+  <link rel="stylesheet" href="styles.css?v=6.5.2">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script type="module" src="app.js?v=6.5.1"></script>
+  <script type="module" src="app.js?v=6.5.2"></script>
 </head>
 
 <body class="auth-pending">
 
   <section id="auth-screen" class="auth-screen" aria-live="polite">
-    <div class="auth-card">
-      <img class="auth-logo" src="assets/logo-din-horizontal.png" alt="DIN · División Industrial · Turno Matutino">
-      <p class="eyebrow">DIVISIÓN INDUSTRIAL · TURNO MATUTINO</p>
-      <h1>Agenda de Salas Audiovisuales</h1>
-      <p id="auth-message">Inicia sesión con una cuenta autorizada para consultar y modificar la agenda compartida.</p>
-      <button id="sign-in" class="primary auth-button">Iniciar sesión con Google</button>
-      <button id="auth-sign-out" class="quiet auth-button" hidden>Cerrar sesión</button>
-      <small>Sincronización puntual: Firestore conserva los datos y la agenda solo recibe cambios necesarios.</small>
-      <small class="auth-credit">Elaborada y administrada por Iván Gutiérrez Bautista</small>
+    <div class="auth-layout">
+      <aside class="auth-brand-panel" aria-hidden="true">
+        <img class="auth-panel-logo" src="assets/logo-din-horizontal.png" alt="">
+        <div class="auth-panel-copy">
+          <span class="auth-panel-kicker">DIVISIÓN INDUSTRIAL · UTEQ</span>
+          <h2>Un solo espacio para consultar, reservar y coordinar.</h2>
+          <p>Agenda compartida de salas audiovisuales con disponibilidad semanal y sincronización puntual entre usuarios.</p>
+          <div class="auth-feature-grid">
+            <span>Disponibilidad semanal</span>
+            <span>Reservación por sala</span>
+            <span>Sincronización puntual</span>
+          </div>
+        </div>
+        <img class="auth-panel-mark" src="assets/icon-din.png" alt="">
+      </aside>
+
+      <div class="auth-card">
+        <img class="auth-logo" src="assets/logo-din-horizontal.png" alt="DIN · División Industrial · Turno Matutino">
+        <p class="eyebrow">AGENDA DIGITAL DIN</p>
+        <h1>Salas Audiovisuales</h1>
+        <p class="auth-lead">Consulta disponibilidad y administra reservaciones desde una interfaz compartida de la División Industrial.</p>
+        <div class="auth-status-box">
+          <span class="auth-status-dot" aria-hidden="true"></span>
+          <p id="auth-message">Inicia sesión con una cuenta autorizada para consultar y modificar la agenda compartida.</p>
+        </div>
+        <button id="sign-in" class="primary auth-button">Iniciar sesión con Google</button>
+        <button id="auth-sign-out" class="quiet auth-button" hidden>Cerrar sesión</button>
+        <div class="auth-meta">
+          <small>Firestore conserva los datos · Realtime Database coordina señales temporales.</small>
+          <small class="auth-credit">Elaborada y administrada por Iván Gutiérrez Bautista</small>
+        </div>
+      </div>
     </div>
   </section>
 
   <header class="topbar">
     <a class="brand" href="./" aria-label="Agenda de Salas Audiovisuales DIN">
-      <img class="brand-logo" src="assets/icon-din.png" alt="">
-      <span>
-        <b>DIN · DIVISIÓN INDUSTRIAL</b>
-        <small>Agenda de Salas Audiovisuales</small>
-        <em>Turno Matutino · UTEQ</em>
+      <img class="brand-wordmark" src="assets/logo-din-horizontal.png" alt="DIN · División Industrial · Turno Matutino">
+      <span class="brand-app-name">
+        <b>AGENDA DIGITAL</b>
+        <small>Salas Audiovisuales</small>
+        <em>División Industrial · UTEQ</em>
       </span>
     </a>
 
@@ -53,9 +76,14 @@
     <section class="intro intro-din">
       <img class="intro-din-mark" src="assets/icon-din.png" alt="" aria-hidden="true">
       <div class="intro-copy">
-        <p class="eyebrow">DIN · AGENDA DE RESERVACIONES</p>
-        <h1>Salas audiovisuales · División Industrial</h1>
-        <p class="subtitle">Consulta disponibilidad y reserva espacios con una agenda compartida, clara y sincronizada.</p>
+        <div class="intro-badge"><span></span> AGENDA DIGITAL DIN</div>
+        <h1>Reservación de Salas Audiovisuales</h1>
+        <p class="subtitle">Disponibilidad, reservaciones y coordinación de espacios de la División Industrial en una sola vista.</p>
+        <div class="intro-microcopy">
+          <span>Lunes a sábado</span>
+          <span>07:00–22:00</span>
+          <span>Sincronización puntual</span>
+        </div>
       </div>
       <div class="intro-actions">
         <button id="block-room" class="quiet">Bloquear sala</button>
