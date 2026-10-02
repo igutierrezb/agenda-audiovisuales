@@ -1,0 +1,31 @@
+V6.4 · 2026-10-01
+==================
+
+FIRESTORE / RENDIMIENTO
+- Carga semanal puntual; se retiraron listeners permanentes de la semana.
+- Presencia ligera por usuario, sin heartbeat periódico.
+- Con 1 usuario activo: sin listener de reservaciones/bloqueos en tiempo real.
+- Con 2+ usuarios activos: canal de cambios puntuales de `bookings` y `roomBlocks`.
+- Cambio remoto = documento puntual modificado; no se relee semana/día completo.
+- Presencia y canal colaborativo suspendidos tras 150000 ms de inactividad.
+- Mouse/teclado/toque solo reinician temporizador local; no escriben Firebase.
+- Guardado local reflejado sin recarga de semana.
+- `settings` reutilizado desde memoria al guardar reservaciones.
+- Nuevo `hourLocks`: un documento por sala/fecha/hora con posiciones 00/30.
+- Compatibilidad progresiva con `locks` legacy.
+- Backup ampliado con `hourLocks` y `legacyLocks`.
+
+INTEGRIDAD
+- `locks` legacy: solo lectura; no se eliminan.
+- `hourLocks`: nuevos candados por hora.
+- `roomBlocks`: retirada lógica (`active=false`) en lugar de borrado físico.
+- Se conserva historial de bookings, users, rooms, roomBlocks, auditLogs y settings.
+- `presence` no contiene información de reservaciones y no sustituye los candados transaccionales.
+
+INTERFAZ
+- Botón central Hoy -> Semana.
+- Mayor contraste Planta Alta / Planta Baja.
+- Sábado ligeramente más oscuro.
+- Línea divisoria a las 15:00.
+- Etiqueta del responsable actualizada.
+- Color contrastante para la persona a quien se le apartó.

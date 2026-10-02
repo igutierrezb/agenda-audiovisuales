@@ -74,6 +74,19 @@ service cloud.firestore {
     }
 
     // --------------------------------------------------
+    // PRESENCIA LIGERA V6.4
+    // --------------------------------------------------
+    match /presence/{userEmail} {
+      // La presencia solo sirve para detectar si hay más de un usuario activo.
+      // No contiene datos de agenda y no usa heartbeat periódico.
+      allow read: if isAuthorized();
+      allow create, update: if isAuthorized()
+        && userEmail == email()
+        && request.resource.data.email == email();
+      allow delete: if false;
+    }
+
+    // --------------------------------------------------
     // SALAS
     // --------------------------------------------------
     match /rooms/{roomId} {
@@ -116,41 +129,24 @@ service cloud.firestore {
     }
 
     // --------------------------------------------------
-    // BLOQUEOS DE 30 MINUTOS
+    // CANDADOS LEGACY DE 30 MINUTOS (SOLO COMPATIBILIDAD)
     // --------------------------------------------------
     match /locks/{lockId} {
       allow read: if isAuthorized();
 
-      // Cualquier usuario autorizado puede crear locks de reservación
-      // o de bloqueo general de sala.
-      allow create: if isOwner()
-        || (
-          isAuthorized()
-          && (
-            !request.resource.data.keys().hasAny(['type'])
-            || request.resource.data.type == 'booking'
-            || request.resource.data.type == 'roomBlock'
-          )
-        );
+      // V6.4 deja de crear o actualizar estos documentos.
+      // Se conservan para validar datos históricos durante la transición.
+      allow create, update: if false;
+      allow delete: if false;
+    }
 
-      // Las actualizaciones de locks existentes mantienen la lógica previa.
-      allow update: if isOwner()
-        || (
-          isAuthorized()
-          && (
-            !request.resource.data.keys().hasAny(['type'])
-            || request.resource.data.type == 'booking'
-          )
-        );
-
-      allow delete: if isOwner()
-        || (
-          isAuthorized()
-          && (
-            !resource.data.keys().hasAny(['type'])
-            || resource.data.type == 'booking'
-          )
-        );
+    // --------------------------------------------------
+    // CANDADOS V6.4 AGRUPADOS POR HORA
+    // --------------------------------------------------
+    match /hourLocks/{lockId} {
+      allow read: if isAuthorized();
+      allow create, update: if isAuthorized();
+      allow delete: if false;
     }
 
     // --------------------------------------------------
@@ -166,7 +162,9 @@ service cloud.firestore {
         && request.resource.data.updatedByEmail == email();
 
       // La administración de bloqueos existentes permanece protegida.
-      allow update, delete: if isOwner();
+      // V6.4 los retira de forma lógica (active=false) para conservar historial.
+      allow update: if isOwner();
+      allow delete: if false;
     }
 
     // --------------------------------------------------

@@ -14,6 +14,7 @@ import {
 
 import {
   collection,
+  Timestamp,
   deleteField,
   doc,
   getDoc,
@@ -32,8 +33,10 @@ const roomsCollection = collection(db, 'rooms');
 const bookingsCollection = collection(db, 'bookings');
 const usersCollection = collection(db, 'authorizedUsers');
 const locksCollection = collection(db, 'locks');
+const hourLocksCollection = collection(db, 'hourLocks');
 const auditCollection = collection(db, 'auditLogs');
 const blocksCollection = collection(db, 'roomBlocks');
+const presenceCollection = collection(db, 'presence');
 
 const settingsRef = doc(db, 'settings', 'main');
 const installationRef = doc(db, 'system', 'installation');
@@ -144,9 +147,110 @@ function slotMinutes(item) {
   return values;
 }
 
-function lockId(roomId, date, minute) {
+function legacyLockId(roomId, date, minute) {
   return `${roomId}__${date}__${minute}`;
 }
+
+function hourLockId(roomId, date, hourStart) {
+  return `${roomId}__${date}__H${String(Math.floor(hourStart / 60)).padStart(2, '0')}`;
+}
+
+function hourLockGroups(item) {
+  const groups = new Map();
+
+  for (const value of slotMinutes(item)) {
+    const hourStart = Math.floor(value / 60) * 60;
+    const id = hourLockId(item.roomId, item.date, hourStart);
+    const slot = value % 60 === 0 ? '00' : '30';
+
+    if (!groups.has(id)) {
+      groups.set(id, {
+        id,
+        roomId: item.roomId,
+        date: item.date,
+        hourStart,
+        slots: new Set()
+      });
+    }
+
+    groups.get(id).slots.add(slot);
+  }
+
+  return groups;
+}
+
+function slotOwner(type, entityId) {
+  return type === 'roomBlock'
+    ? { type, blockId: entityId }
+    : { type: 'booking', bookingId: entityId };
+}
+
+function sameOwner(value, type, entityId) {
+  if (!value) return false;
+  return type === 'roomBlock'
+    ? value.type === 'roomBlock' && value.blockId === entityId
+    : value.type !== 'roomBlock' && value.bookingId === entityId;
+}
+
+function cloneSlots(source) {
+  return { ...(source || {}) };
+}
+
+async function loadHourLockStates(transaction, groups) {
+  const states = new Map();
+
+  for (const group of groups.values()) {
+    const ref = doc(db, 'hourLocks', group.id);
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.exists() ? snapshot.data() : {};
+
+    states.set(group.id, {
+      ...group,
+      ref,
+      slots: cloneSlots(data.slots),
+      legacyChecked: data.legacyChecked === true
+    });
+  }
+
+  for (const state of states.values()) {
+    if (state.legacyChecked) continue;
+
+    for (const offset of [0, 30]) {
+      const legacyMinute = state.hourStart + offset;
+      const legacyRef = doc(
+        db,
+        'locks',
+        legacyLockId(state.roomId, state.date, legacyMinute)
+      );
+      const legacySnap = await transaction.get(legacyRef);
+      if (!legacySnap.exists()) continue;
+
+      const legacy = legacySnap.data();
+      const slot = offset === 0 ? '00' : '30';
+      if (!state.slots[slot]) {
+        state.slots[slot] = legacy.type === 'roomBlock'
+          ? { type: 'roomBlock', blockId: legacy.blockId || '', legacy: true }
+          : { type: 'booking', bookingId: legacy.bookingId || '', legacy: true };
+      }
+    }
+
+    state.legacyChecked = true;
+  }
+
+  return states;
+}
+
+function writeHourLockState(transaction, state) {
+  transaction.set(state.ref, {
+    roomId: state.roomId,
+    date: state.date,
+    hourStart: state.hourStart,
+    slots: state.slots,
+    legacyChecked: true,
+    updatedAt: serverTimestamp()
+  });
+}
+
 
 function docData(snapshot) {
   return { id: snapshot.id, ...snapshot.data() };
@@ -269,86 +373,97 @@ export const repository = {
     return getSettings();
   },
 
-  subscribeStatic(callback, onError) {
-    let rooms = [];
-    let settings = normalizeSettings();
-    let roomsReady = false;
-    let settingsReady = false;
+  async loadStatic() {
+    const [roomsSnapshot, settingsSnapshot] = await Promise.all([
+      getDocs(roomsCollection),
+      getDoc(settingsRef)
+    ]);
 
-    const emit = () => {
-      if (!roomsReady || !settingsReady) return;
-
-      callback({
-        rooms: rooms
-          .map(normalizeRoom)
-          .sort(compareRooms),
-        settings
-      });
+    return {
+      rooms: roomsSnapshot.docs
+        .map(docData)
+        .map(normalizeRoom)
+        .sort(compareRooms),
+      settings: normalizeSettings(
+        settingsSnapshot.exists() ? settingsSnapshot.data() : DEFAULT_SETTINGS
+      )
     };
-
-    const unsubs = [
-      onSnapshot(roomsCollection, snapshot => {
-        rooms = snapshot.docs.map(docData);
-        roomsReady = true;
-        emit();
-      }, onError),
-
-      onSnapshot(settingsRef, snapshot => {
-        settings = normalizeSettings(snapshot.exists() ? snapshot.data() : DEFAULT_SETTINGS);
-        settingsReady = true;
-        emit();
-      }, onError)
-    ];
-
-    return () => unsubs.forEach(unsub => unsub?.());
   },
 
-  subscribeRange({ from, to }, callback, onError) {
-    let bookings = [];
-    let blocks = [];
-    let bookingsReady = false;
-    let blocksReady = false;
+  async loadRange({ from, to }) {
+    const [bookingsSnapshot, blocksSnapshot] = await Promise.all([
+      queryByDate(bookingsCollection, from, to),
+      queryByDate(blocksCollection, from, to)
+    ]);
 
-    const emit = () => {
-      if (!bookingsReady || !blocksReady) return;
-
-      callback({
-        bookings: bookings
-          .map(normalizeBooking)
-          .sort((a, b) =>
-            String(a.date).localeCompare(String(b.date)) ||
-            minutes(a.start) - minutes(b.start)
-          ),
-        blocks: blocks.sort((a, b) =>
+    return {
+      bookings: bookingsSnapshot.docs
+        .map(docData)
+        .map(normalizeBooking)
+        .sort((a, b) =>
+          String(a.date).localeCompare(String(b.date)) ||
+          minutes(a.start) - minutes(b.start)
+        ),
+      blocks: blocksSnapshot.docs
+        .map(docData)
+        .sort((a, b) =>
           String(a.date).localeCompare(String(b.date)) ||
           minutes(a.start) - minutes(b.start)
         )
-      });
     };
+  },
+
+  async setPresence(actorEmail, active) {
+    const actor = cleanEmail(actorEmail);
+    if (!actor) throw new Error('No se pudo identificar al usuario.');
+
+    await setDoc(doc(db, 'presence', actor), {
+      email: actor,
+      active: active === true,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  },
+
+  subscribePresence(callback, onError) {
+    const activeQuery = query(
+      presenceCollection,
+      where('active', '==', true)
+    );
+
+    return onSnapshot(activeQuery, snapshot => {
+      callback(snapshot.docs.map(docData));
+    }, onError);
+  },
+
+  subscribeAgendaChanges(sinceMs, callback, onError) {
+    const since = Timestamp.fromMillis(Math.max(0, Number(sinceMs) || Date.now()));
 
     const bookingsQuery = query(
       bookingsCollection,
-      where('date', '>=', from),
-      where('date', '<=', to)
+      where('updatedAt', '>=', since)
     );
 
     const blocksQuery = query(
       blocksCollection,
-      where('date', '>=', from),
-      where('date', '<=', to)
+      where('updatedAt', '>=', since)
     );
 
     const unsubs = [
       onSnapshot(bookingsQuery, snapshot => {
-        bookings = snapshot.docs.map(docData);
-        bookingsReady = true;
-        emit();
+        const bookings = snapshot.docChanges()
+          .filter(change => change.type !== 'removed')
+          .map(change => normalizeBooking({
+            id: change.doc.id,
+            ...change.doc.data()
+          }));
+        if (bookings.length) callback({ bookings, blocks: [] });
       }, onError),
 
       onSnapshot(blocksQuery, snapshot => {
-        blocks = snapshot.docs.map(docData);
-        blocksReady = true;
-        emit();
+        const blocks = snapshot.docChanges()
+          .filter(change => change.type !== 'removed')
+          .map(change => ({ id: change.doc.id, ...change.doc.data() }));
+        if (blocks.length) callback({ bookings: [], blocks });
       }, onError)
     ];
 
@@ -371,38 +486,28 @@ export const repository = {
     return snapshot.docs.map(docData);
   },
 
-  async saveBooking(source, actorEmail) {
+  async saveBooking(source, actorEmail, settingsSource = null) {
     const actor = cleanEmail(actorEmail);
     if (!actor) throw new Error('No se pudo identificar al usuario.');
 
     const booking = bookingShape(source);
-    const settings = await getSettings();
-
+    const settings = normalizeSettings(settingsSource || DEFAULT_SETTINGS);
     const existingId = booking.id;
     const bookingRef = existingId
       ? doc(db, 'bookings', existingId)
       : doc(bookingsCollection);
-
     const bookingId = bookingRef.id;
 
-    await runTransaction(db, async transaction => {
+    return runTransaction(db, async transaction => {
       const roomRef = doc(db, 'rooms', booking.roomId);
       const roomSnap = await transaction.get(roomRef);
       activeRoomOrThrow(roomSnap.exists() ? normalizeRoom(roomSnap.data()) : null);
 
       let previous = null;
-
       if (existingId) {
         const previousSnap = await transaction.get(bookingRef);
-        if (!previousSnap.exists()) {
-          throw new Error('Esta reservación ya no existe.');
-        }
-
-        previous = normalizeBooking({
-          id: previousSnap.id,
-          ...previousSnap.data()
-        });
-
+        if (!previousSnap.exists()) throw new Error('Esta reservación ya no existe.');
+        previous = normalizeBooking({ id: previousSnap.id, ...previousSnap.data() });
         if (previous.status === 'cancelled') {
           throw new Error('La reservación está cancelada. Restáurala antes de editarla.');
         }
@@ -413,54 +518,51 @@ export const repository = {
         bookings: []
       }, settings);
 
-      const newLockIds = slotMinutes(booking).map(value =>
-        lockId(booking.roomId, booking.date, value)
-      );
+      const newGroups = hourLockGroups(booking);
+      const oldGroups = previous ? hourLockGroups(previous) : new Map();
+      const combined = new Map([...oldGroups, ...newGroups]);
+      const states = await loadHourLockStates(transaction, combined);
 
-      const oldLockIds = previous
-        ? slotMinutes(previous).map(value =>
-            lockId(previous.roomId, previous.date, value)
-          )
-        : [];
-
-      const uniqueReadIds = [...new Set([...newLockIds, ...oldLockIds])];
-      const lockSnapshots = new Map();
-
-      for (const id of uniqueReadIds) {
-        lockSnapshots.set(
-          id,
-          await transaction.get(doc(db, 'locks', id))
-        );
-      }
-
-      for (const id of newLockIds) {
-        const snapshot = lockSnapshots.get(id);
-        if (!snapshot?.exists()) continue;
-
-        const data = snapshot.data();
-        if (data.bookingId !== bookingId) {
-          throw new Error('La sala ya se encuentra ocupada durante parte de este horario.');
+      for (const [id, group] of newGroups) {
+        const state = states.get(id);
+        for (const slot of group.slots) {
+          const owner = state.slots[slot];
+          if (owner && !sameOwner(owner, 'booking', bookingId)) {
+            throw new Error('La sala ya se encuentra ocupada durante parte de este horario.');
+          }
         }
       }
 
-      for (const id of oldLockIds) {
-        if (!newLockIds.includes(id)) {
-          transaction.delete(doc(db, 'locks', id));
+      for (const [id, group] of oldGroups) {
+        const state = states.get(id);
+        for (const slot of group.slots) {
+          if (sameOwner(state.slots[slot], 'booking', bookingId)) {
+            delete state.slots[slot];
+          }
         }
       }
 
-      for (const id of newLockIds) {
-        transaction.set(doc(db, 'locks', id), {
-          type: 'booking',
-          bookingId,
-          roomId: booking.roomId,
-          date: booking.date,
-          updatedAt: serverTimestamp()
-        });
+      for (const [id, group] of newGroups) {
+        const state = states.get(id);
+        for (const slot of group.slots) {
+          state.slots[slot] = slotOwner('booking', bookingId);
+        }
       }
+
+      for (const state of states.values()) writeHourLockState(transaction, state);
 
       const createdByEmail = previous?.createdByEmail || actor;
       const createdByLabel = previous?.createdByLabel || actor.split('@')[0];
+      const saved = {
+        ...booking,
+        id: bookingId,
+        status: 'active',
+        createdByEmail,
+        createdByLabel,
+        updatedByEmail: actor,
+        updatedByLabel: actor.split('@')[0],
+        createdAt: previous?.createdAt || null
+      };
 
       transaction.set(bookingRef, {
         roomId: booking.roomId,
@@ -487,7 +589,6 @@ export const repository = {
         previous.start !== booking.start ||
         previous.end !== booking.end
       );
-
       const action = previous
         ? (moved ? 'MOVE_BOOKING' : 'UPDATE_BOOKING')
         : 'CREATE_BOOKING';
@@ -496,38 +597,49 @@ export const repository = {
         bookingId,
         roomId: booking.roomId,
         before: previous || null,
-        after: {
-          ...booking,
-          id: bookingId,
-          status: 'active'
-        }
+        after: saved
       }));
-    });
 
-    return bookingId;
+      return { booking: saved, before: previous };
+    });
   },
 
-  async saveBookings(sources, actorEmail) {
+  async saveBookings(sources, actorEmail, settingsSource = null) {
     const actor = cleanEmail(actorEmail);
     if (!actor) throw new Error('No se pudo identificar al usuario.');
 
     const prepared = sources.map(bookingShape);
     if (!prepared.length) throw new Error('No hay reservaciones para guardar.');
 
-    const settings = await getSettings();
+    const settings = normalizeSettings(settingsSource || DEFAULT_SETTINGS);
     const seriesId = crypto.randomUUID();
     const refs = prepared.map(() => doc(bookingsCollection));
 
-    const totalWrites = prepared.reduce(
-      (sum, booking) => sum + 1 + slotMinutes(booking).length,
-      0
-    );
+    const allGroups = new Map();
+    const requestedSlots = new Set();
 
+    for (let index = 0; index < prepared.length; index++) {
+      const booking = prepared[index];
+      const groups = hourLockGroups(booking);
+      for (const [id, group] of groups) {
+        if (!allGroups.has(id)) allGroups.set(id, { ...group, slots: new Set() });
+        for (const slot of group.slots) {
+          const key = `${id}:${slot}`;
+          if (requestedSlots.has(key)) {
+            throw new Error(`${booking.date}: hay un empalme dentro de la repetición solicitada.`);
+          }
+          requestedSlots.add(key);
+          allGroups.get(id).slots.add(slot);
+        }
+      }
+    }
+
+    const totalWrites = prepared.length + allGroups.size + 2;
     if (totalWrites > 380) {
       throw new Error('La repetición es demasiado amplia. Reduce el periodo y vuelve a intentarlo.');
     }
 
-    await runTransaction(db, async transaction => {
+    return runTransaction(db, async transaction => {
       const roomIds = [...new Set(prepared.map(item => item.roomId))];
       const roomSnapshots = new Map();
 
@@ -540,63 +652,45 @@ export const repository = {
 
       for (const booking of prepared) {
         validateBooking(booking, {
-          rooms: [{
-            id: booking.roomId,
-            ...roomSnapshots.get(booking.roomId).data()
-          }],
+          rooms: [{ id: booking.roomId, ...roomSnapshots.get(booking.roomId).data() }],
           bookings: []
         }, settings);
       }
 
-      const lockRefs = [];
-      const seen = new Set();
-
-      for (let i = 0; i < prepared.length; i++) {
-        const booking = prepared[i];
-
-        for (const value of slotMinutes(booking)) {
-          const id = lockId(booking.roomId, booking.date, value);
-
-          if (seen.has(id)) {
-            throw new Error(`${booking.date}: hay un empalme dentro de la repetición solicitada.`);
+      const states = await loadHourLockStates(transaction, allGroups);
+      for (const [id, group] of allGroups) {
+        const state = states.get(id);
+        for (const slot of group.slots) {
+          if (state.slots[slot]) {
+            const date = group.date;
+            throw new Error(`${date}: la sala ya se encuentra ocupada durante parte de este horario.`);
           }
-
-          seen.add(id);
-          lockRefs.push({ id, booking, bookingRef: refs[i] });
         }
       }
 
-      const lockSnapshots = new Map();
-
-      for (const item of lockRefs) {
-        lockSnapshots.set(
-          item.id,
-          await transaction.get(doc(db, 'locks', item.id))
-        );
-      }
-
-      for (const item of lockRefs) {
-        if (lockSnapshots.get(item.id)?.exists()) {
-          throw new Error(`${item.booking.date}: la sala ya se encuentra ocupada durante parte de este horario.`);
+      const savedBookings = [];
+      for (let index = 0; index < prepared.length; index++) {
+        const booking = prepared[index];
+        const bookingRef = refs[index];
+        const groups = hourLockGroups(booking);
+        for (const [id, group] of groups) {
+          const state = states.get(id);
+          for (const slot of group.slots) {
+            state.slots[slot] = slotOwner('booking', bookingRef.id);
+          }
         }
-      }
 
-      for (const item of lockRefs) {
-        transaction.set(doc(db, 'locks', item.id), {
-          type: 'booking',
-          bookingId: item.bookingRef.id,
-          roomId: item.booking.roomId,
-          date: item.booking.date,
-          updatedAt: serverTimestamp()
-        });
-      }
-
-      const bookingIds = [];
-
-      for (let i = 0; i < prepared.length; i++) {
-        const booking = prepared[i];
-        const bookingRef = refs[i];
-        bookingIds.push(bookingRef.id);
+        const saved = {
+          ...booking,
+          id: bookingRef.id,
+          seriesId,
+          status: 'active',
+          createdByEmail: actor,
+          createdByLabel: actor.split('@')[0],
+          updatedByEmail: actor,
+          updatedByLabel: actor.split('@')[0]
+        };
+        savedBookings.push(saved);
 
         transaction.set(bookingRef, {
           roomId: booking.roomId,
@@ -618,40 +712,51 @@ export const repository = {
         });
       }
 
+      for (const state of states.values()) writeHourLockState(transaction, state);
+
       transaction.set(doc(auditCollection), auditPayload('CREATE_SERIES', actor, {
         seriesId,
-        bookingIds,
-        count: bookingIds.length,
+        bookingIds: refs.map(ref => ref.id),
+        count: refs.length,
         after: {
           firstDate: prepared[0].date,
           lastDate: prepared[prepared.length - 1].date
         }
       }));
-    });
 
-    return seriesId;
+      return { seriesId, bookings: savedBookings };
+    });
   },
 
   async cancelBooking(id, actorEmail) {
     const actor = cleanEmail(actorEmail);
     const bookingRef = doc(db, 'bookings', id);
 
-    await runTransaction(db, async transaction => {
+    return runTransaction(db, async transaction => {
       const snapshot = await transaction.get(bookingRef);
       if (!snapshot.exists()) throw new Error('La reservación ya no existe.');
 
-      const booking = normalizeBooking({
-        id: snapshot.id,
-        ...snapshot.data()
-      });
+      const booking = normalizeBooking({ id: snapshot.id, ...snapshot.data() });
+      if (booking.status === 'cancelled') return { booking };
 
-      if (booking.status === 'cancelled') return;
-
-      for (const value of slotMinutes(booking)) {
-        transaction.delete(
-          doc(db, 'locks', lockId(booking.roomId, booking.date, value))
-        );
+      const groups = hourLockGroups(booking);
+      const states = await loadHourLockStates(transaction, groups);
+      for (const [groupId, group] of groups) {
+        const state = states.get(groupId);
+        for (const slot of group.slots) {
+          if (sameOwner(state.slots[slot], 'booking', id)) delete state.slots[slot];
+        }
       }
+      for (const state of states.values()) writeHourLockState(transaction, state);
+
+      const cancelled = {
+        ...booking,
+        status: 'cancelled',
+        cancelledByEmail: actor,
+        cancelledByLabel: actor.split('@')[0],
+        updatedByEmail: actor,
+        updatedByLabel: actor.split('@')[0]
+      };
 
       transaction.update(bookingRef, {
         status: 'cancelled',
@@ -667,12 +772,10 @@ export const repository = {
         bookingId: id,
         roomId: booking.roomId,
         before: booking,
-        after: {
-          ...booking,
-          status: 'cancelled',
-          cancelledByEmail: actor
-        }
+        after: cancelled
       }));
+
+      return { booking: cancelled };
     });
   },
 
@@ -684,44 +787,15 @@ export const repository = {
       query(bookingsCollection, where('seriesId', '==', seriesId))
     );
 
-    const operations = [];
-    let count = 0;
-
+    const cancelledBookings = [];
     for (const bookingDoc of snapshot.docs) {
-      const booking = normalizeBooking({
-        id: bookingDoc.id,
-        ...bookingDoc.data()
-      });
-
+      const booking = normalizeBooking({ id: bookingDoc.id, ...bookingDoc.data() });
       if (booking.status === 'cancelled') continue;
-      count += 1;
-
-      for (const value of slotMinutes(booking)) {
-        operations.push(batch => batch.delete(
-          doc(db, 'locks', lockId(booking.roomId, booking.date, value))
-        ));
-      }
-
-      operations.push(batch => batch.update(bookingDoc.ref, {
-        status: 'cancelled',
-        cancelledAt: serverTimestamp(),
-        cancelledByEmail: actor,
-        cancelledByLabel: actor.split('@')[0],
-        updatedAt: serverTimestamp(),
-        updatedByEmail: actor,
-        updatedByLabel: actor.split('@')[0]
-      }));
+      const result = await this.cancelBooking(booking.id, actor);
+      if (result?.booking) cancelledBookings.push(result.booking);
     }
 
-    operations.push(batch => batch.set(
-      doc(auditCollection),
-      auditPayload('CANCEL_SERIES', actor, {
-        seriesId,
-        count
-      })
-    ));
-
-    await writeChunks(operations);
+    return { count: cancelledBookings.length, bookings: cancelledBookings };
   },
 
   async restoreBooking(id, actorEmail) {
@@ -732,15 +806,11 @@ export const repository = {
 
     const bookingRef = doc(db, 'bookings', id);
 
-    await runTransaction(db, async transaction => {
+    return runTransaction(db, async transaction => {
       const snapshot = await transaction.get(bookingRef);
       if (!snapshot.exists()) throw new Error('La reservación ya no existe.');
 
-      const booking = normalizeBooking({
-        id: snapshot.id,
-        ...snapshot.data()
-      });
-
+      const booking = normalizeBooking({ id: snapshot.id, ...snapshot.data() });
       if (booking.status !== 'cancelled') {
         throw new Error('La reservación ya se encuentra activa.');
       }
@@ -749,29 +819,33 @@ export const repository = {
       const roomSnap = await transaction.get(roomRef);
       activeRoomOrThrow(roomSnap.exists() ? normalizeRoom(roomSnap.data()) : null);
 
-      const lockRefs = slotMinutes(booking).map(value =>
-        doc(db, 'locks', lockId(booking.roomId, booking.date, value))
-      );
-
-      const lockSnapshots = [];
-
-      for (const lockRef of lockRefs) {
-        lockSnapshots.push(await transaction.get(lockRef));
+      const groups = hourLockGroups(booking);
+      const states = await loadHourLockStates(transaction, groups);
+      for (const [groupId, group] of groups) {
+        const state = states.get(groupId);
+        for (const slot of group.slots) {
+          const owner = state.slots[slot];
+          if (owner && !sameOwner(owner, 'booking', id)) {
+            throw new Error('No se puede restaurar: el horario ya está ocupado.');
+          }
+        }
       }
 
-      if (lockSnapshots.some(item => item.exists())) {
-        throw new Error('No se puede restaurar: el horario ya está ocupado.');
+      for (const [groupId, group] of groups) {
+        const state = states.get(groupId);
+        for (const slot of group.slots) state.slots[slot] = slotOwner('booking', id);
       }
+      for (const state of states.values()) writeHourLockState(transaction, state);
 
-      for (const lockRef of lockRefs) {
-        transaction.set(lockRef, {
-          type: 'booking',
-          bookingId: id,
-          roomId: booking.roomId,
-          date: booking.date,
-          updatedAt: serverTimestamp()
-        });
-      }
+      const restored = {
+        ...booking,
+        status: 'active',
+        cancelledAt: undefined,
+        cancelledByEmail: undefined,
+        cancelledByLabel: undefined,
+        updatedByEmail: actor,
+        updatedByLabel: actor.split('@')[0]
+      };
 
       transaction.update(bookingRef, {
         status: 'active',
@@ -787,11 +861,10 @@ export const repository = {
         bookingId: id,
         roomId: booking.roomId,
         before: booking,
-        after: {
-          ...booking,
-          status: 'active'
-        }
+        after: restored
       }));
+
+      return { booking: restored };
     });
   },
 
@@ -1020,119 +1093,13 @@ export const repository = {
 
   async saveRoomBlocks(sources, actorEmail) {
     const actor = cleanEmail(actorEmail);
-    if (!actor) {
-      throw new Error('No se pudo identificar al usuario.');
+    if (!actor) throw new Error('No se pudo identificar al usuario.');
+
+    const saved = [];
+    for (const source of sources) {
+      saved.push(await this.saveRoomBlock(source, actor));
     }
-
-    const blocks = sources.map(blockShape);
-    if (!blocks.length) throw new Error('No hay bloqueos para guardar.');
-
-    for (const block of blocks) {
-      if (!block.roomId || !block.date || !block.start || !block.end || !block.reason) {
-        throw new Error('Completa sala, fecha, horario y motivo.');
-      }
-
-      if (minutes(block.start) >= minutes(block.end)) {
-        throw new Error(`${block.date}: la hora final debe ser posterior a la inicial.`);
-      }
-    }
-
-    const blockRefs = blocks.map(() => doc(blocksCollection));
-    const totalWrites = blocks.reduce(
-      (sum, block) => sum + 1 + slotMinutes(block).length,
-      0
-    ) + 1;
-
-    if (totalWrites > 380) {
-      throw new Error('El periodo de bloqueo es demasiado amplio. Reduce el número de días y vuelve a intentarlo.');
-    }
-
-    await runTransaction(db, async transaction => {
-      const roomIds = [...new Set(blocks.map(block => block.roomId))];
-
-      for (const roomId of roomIds) {
-        const roomRef = doc(db, 'rooms', roomId);
-        const roomSnap = await transaction.get(roomRef);
-        activeRoomOrThrow(roomSnap.exists() ? normalizeRoom(roomSnap.data()) : null);
-      }
-
-      const lockItems = [];
-      const requestedLocks = new Set();
-
-      for (let index = 0; index < blocks.length; index++) {
-        const block = blocks[index];
-        const blockRef = blockRefs[index];
-
-        for (const value of slotMinutes(block)) {
-          const id = lockId(block.roomId, block.date, value);
-
-          if (requestedLocks.has(id)) {
-            throw new Error(`${block.date}: existen horarios duplicados dentro del bloqueo solicitado.`);
-          }
-
-          requestedLocks.add(id);
-          lockItems.push({ id, block, blockRef });
-        }
-      }
-
-      const snapshots = new Map();
-
-      for (const item of lockItems) {
-        snapshots.set(
-          item.id,
-          await transaction.get(doc(db, 'locks', item.id))
-        );
-      }
-
-      for (const item of lockItems) {
-        if (snapshots.get(item.id)?.exists()) {
-          throw new Error(`${item.block.date}: existe una reservación o bloqueo en ese horario. No se realizó ningún bloqueo.`);
-        }
-      }
-
-      for (const item of lockItems) {
-        transaction.set(doc(db, 'locks', item.id), {
-          type: 'roomBlock',
-          blockId: item.blockRef.id,
-          roomId: item.block.roomId,
-          date: item.block.date,
-          updatedAt: serverTimestamp()
-        });
-      }
-
-      for (let index = 0; index < blocks.length; index++) {
-        const block = blocks[index];
-        const blockRef = blockRefs[index];
-
-        transaction.set(blockRef, {
-          roomId: block.roomId,
-          date: block.date,
-          start: block.start,
-          end: block.end,
-          reason: block.reason,
-          active: true,
-          createdAt: serverTimestamp(),
-          createdByEmail: actor,
-          updatedAt: serverTimestamp(),
-          updatedByEmail: actor
-        });
-      }
-
-      transaction.set(doc(auditCollection), auditPayload(
-        'ROOM_BLOCK_SERIES_CREATED',
-        actor,
-        {
-          roomId: blocks[0].roomId,
-          blockIds: blockRefs.map(ref => ref.id),
-          count: blocks.length,
-          from: blocks[0].date,
-          to: blocks[blocks.length - 1].date,
-          reason: blocks[0].reason
-        }
-      ));
-    });
-
-    return blockRefs.map(ref => ref.id);
+    return saved;
   },
 
   async saveRoomBlock(source, actorEmail) {
@@ -1143,7 +1110,6 @@ export const repository = {
     if (!block.roomId || !block.date || !block.start || !block.end || !block.reason) {
       throw new Error('Completa sala, fecha, horario y motivo.');
     }
-
     if (minutes(block.start) >= minutes(block.end)) {
       throw new Error('La hora final debe ser posterior a la inicial.');
     }
@@ -1152,59 +1118,52 @@ export const repository = {
       ? doc(db, 'roomBlocks', block.id)
       : doc(blocksCollection);
 
-    await runTransaction(db, async transaction => {
+    return runTransaction(db, async transaction => {
       const roomRef = doc(db, 'rooms', block.roomId);
       const roomSnap = await transaction.get(roomRef);
       activeRoomOrThrow(roomSnap.exists() ? normalizeRoom(roomSnap.data()) : null);
 
       let previous = null;
-
       if (block.id) {
         const previousSnap = await transaction.get(blockRef);
         if (!previousSnap.exists()) throw new Error('El bloqueo ya no existe.');
         previous = { id: previousSnap.id, ...previousSnap.data() };
       }
 
-      const newLockIds = slotMinutes(block).map(value =>
-        lockId(block.roomId, block.date, value)
-      );
+      const newGroups = hourLockGroups(block);
+      const oldGroups = previous ? hourLockGroups(previous) : new Map();
+      const combined = new Map([...oldGroups, ...newGroups]);
+      const states = await loadHourLockStates(transaction, combined);
 
-      const oldLockIds = previous
-        ? slotMinutes(previous).map(value =>
-            lockId(previous.roomId, previous.date, value)
-          )
-        : [];
-
-      const allIds = [...new Set([...newLockIds, ...oldLockIds])];
-      const snapshots = new Map();
-
-      for (const id of allIds) {
-        snapshots.set(id, await transaction.get(doc(db, 'locks', id)));
-      }
-
-      for (const id of newLockIds) {
-        const snapshot = snapshots.get(id);
-        if (!snapshot?.exists()) continue;
-        if (snapshot.data()?.blockId !== blockRef.id) {
-          throw new Error('No se puede bloquear: existe una reservación o bloqueo en ese horario.');
+      for (const [groupId, group] of newGroups) {
+        const state = states.get(groupId);
+        for (const slot of group.slots) {
+          const owner = state.slots[slot];
+          if (owner && !sameOwner(owner, 'roomBlock', blockRef.id)) {
+            throw new Error('No se puede bloquear: existe una reservación o bloqueo en ese horario.');
+          }
         }
       }
 
-      for (const id of oldLockIds) {
-        if (!newLockIds.includes(id)) {
-          transaction.delete(doc(db, 'locks', id));
+      for (const [groupId, group] of oldGroups) {
+        const state = states.get(groupId);
+        for (const slot of group.slots) {
+          if (sameOwner(state.slots[slot], 'roomBlock', blockRef.id)) delete state.slots[slot];
         }
       }
-
-      for (const id of newLockIds) {
-        transaction.set(doc(db, 'locks', id), {
-          type: 'roomBlock',
-          blockId: blockRef.id,
-          roomId: block.roomId,
-          date: block.date,
-          updatedAt: serverTimestamp()
-        });
+      for (const [groupId, group] of newGroups) {
+        const state = states.get(groupId);
+        for (const slot of group.slots) state.slots[slot] = slotOwner('roomBlock', blockRef.id);
       }
+      for (const state of states.values()) writeHourLockState(transaction, state);
+
+      const saved = {
+        ...block,
+        id: blockRef.id,
+        active: true,
+        createdByEmail: previous?.createdByEmail || actor,
+        updatedByEmail: actor
+      };
 
       transaction.set(blockRef, {
         roomId: block.roomId,
@@ -1222,16 +1181,11 @@ export const repository = {
       transaction.set(doc(auditCollection), auditPayload(
         previous ? 'ROOM_BLOCK_UPDATED' : 'ROOM_BLOCK_CREATED',
         actor,
-        {
-          roomId: block.roomId,
-          blockId: blockRef.id,
-          before: previous,
-          after: { ...block, id: blockRef.id }
-        }
+        { roomId: block.roomId, blockId: blockRef.id, before: previous, after: saved }
       ));
-    });
 
-    return blockRef.id;
+      return saved;
+    });
   },
 
   async deleteRoomBlock(id, actorEmail) {
@@ -1240,25 +1194,44 @@ export const repository = {
 
     const blockRef = doc(db, 'roomBlocks', id);
 
-    await runTransaction(db, async transaction => {
+    return runTransaction(db, async transaction => {
       const snapshot = await transaction.get(blockRef);
-      if (!snapshot.exists()) return;
+      if (!snapshot.exists()) return null;
 
       const block = { id: snapshot.id, ...snapshot.data() };
+      const groups = hourLockGroups(block);
+      const states = await loadHourLockStates(transaction, groups);
 
-      for (const value of slotMinutes(block)) {
-        transaction.delete(
-          doc(db, 'locks', lockId(block.roomId, block.date, value))
-        );
+      for (const [groupId, group] of groups) {
+        const state = states.get(groupId);
+        for (const slot of group.slots) {
+          if (sameOwner(state.slots[slot], 'roomBlock', id)) delete state.slots[slot];
+        }
       }
+      for (const state of states.values()) writeHourLockState(transaction, state);
 
-      transaction.delete(blockRef);
+      const removed = {
+        ...block,
+        active: false,
+        updatedByEmail: actor
+      };
+
+      transaction.update(blockRef, {
+        active: false,
+        removedAt: serverTimestamp(),
+        removedByEmail: actor,
+        updatedAt: serverTimestamp(),
+        updatedByEmail: actor
+      });
 
       transaction.set(doc(auditCollection), auditPayload('ROOM_BLOCK_REMOVED', actor, {
         roomId: block.roomId,
         blockId: id,
-        before: block
+        before: block,
+        after: removed
       }));
+
+      return removed;
     });
   },
 
@@ -1320,23 +1293,27 @@ export const repository = {
   },
 
   async downloadBackupData() {
-    const [rooms, bookings, users, settings, blocks] = await Promise.all([
+    const [rooms, bookings, users, settings, blocks, hourLocks, legacyLocks] = await Promise.all([
       getDocs(roomsCollection),
       getDocs(bookingsCollection),
       getDocs(usersCollection),
       getDoc(settingsRef),
-      getDocs(blocksCollection)
+      getDocs(blocksCollection),
+      getDocs(hourLocksCollection),
+      getDocs(locksCollection)
     ]);
 
     return {
-      format: 'agenda-audiovisuales-backup-v1',
+      format: 'agenda-audiovisuales-backup-v6.4',
       generatedAt: new Date().toISOString(),
       projectId: 'agenda-audiovisuales-din',
       rooms: rooms.docs.map(docData),
       bookings: bookings.docs.map(docData),
       authorizedUsers: users.docs.map(docData),
       settings: settings.exists() ? settings.data() : normalizeSettings(),
-      roomBlocks: blocks.docs.map(docData)
+      roomBlocks: blocks.docs.map(docData),
+      hourLocks: hourLocks.docs.map(docData),
+      legacyLocks: legacyLocks.docs.map(docData)
     };
   }
 };

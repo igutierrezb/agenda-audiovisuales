@@ -7,9 +7,9 @@
   <meta name="description" content="Agenda semanal de reservación de salas audiovisuales de la División Industrial.">
   <title>Reservación de Salas Audiovisuales · División Industrial</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=6.3">
+  <link rel="stylesheet" href="styles.css?v=6.4">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script type="module" src="app.js?v=6.3"></script>
+  <script type="module" src="app.js?v=6.4"></script>
 </head>
 
 <body class="auth-pending">
@@ -22,7 +22,7 @@
       <p id="auth-message">Inicia sesión con una cuenta autorizada para consultar y modificar la agenda compartida.</p>
       <button id="sign-in" class="primary auth-button">Iniciar sesión con Google</button>
       <button id="auth-sign-out" class="quiet auth-button" hidden>Cerrar sesión</button>
-      <small>Agenda sincronizada en tiempo real.</small>
+      <small>Agenda optimizada con sincronización puntual entre usuarios.</small>
       <small class="auth-credit">Elaborada y administrada por Iván Gutiérrez Bautista</small>
     </div>
   </section>
@@ -78,7 +78,7 @@
 
         <div class="navigation">
           <button id="previous" aria-label="Semana anterior">←</button>
-          <button id="today">Hoy</button>
+          <button id="current-week">Semana</button>
           <button id="next" aria-label="Semana siguiente">→</button>
         </div>
       </div>
@@ -126,7 +126,7 @@
       </label>
 
       <label>
-        Maestro o persona que aparta
+        Maestro / persona a quien se le apartará
         <input
           name="teacher"
           required

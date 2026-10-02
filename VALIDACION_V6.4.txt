@@ -1,0 +1,24 @@
+VALIDACIÓN TÉCNICA V6.4
+=======================
+
+[OK] app.js: sintaxis JavaScript válida.
+[OK] storage.js: sintaxis JavaScript válida.
+[OK] core.js: sintaxis JavaScript válida.
+[OK] firebase.js: sintaxis JavaScript válida.
+[OK] Suite core.test.js: 5/5 pruebas aprobadas.
+[OK] La agenda normal consulta solo la semana visible.
+[OK] No hay listener permanente de toda la semana, salas o settings.
+[OK] La presencia ligera no usa heartbeat periódico.
+[OK] Con un solo usuario activo no se abre el listener de bookings/roomBlocks.
+[OK] Con dos o más usuarios activos se reciben únicamente documentos modificados.
+[OK] La inactividad está fijada en 150000 ms (2 min 30 s).
+[OK] Clics/movimiento solo reinician temporizador local; no escriben Firebase.
+[OK] Guardar/modificar desde estado inactivo reactiva presencia.
+[OK] Guardados confirmados actualizan estado local sin recarga de semana.
+[OK] `hourLocks` agrupa 00/30 dentro de un documento por hora.
+[OK] Los locks legacy se conservan y se verifican progresivamente.
+[OK] Firestore rules bloquean nuevas escrituras en locks legacy.
+[OK] Firestore rules permiten presencia solo en el documento del propio usuario.
+[OK] El botón central muestra “Semana”.
+[OK] Etiqueta “Maestro / persona a quien se le apartará”.
+[OK] Sábado más oscuro, plantas diferenciadas y divisor 15:00.

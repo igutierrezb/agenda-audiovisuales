@@ -1785,7 +1785,7 @@ button:disabled {
 }
 
 
-/* V6.3 · bloqueo general + optimización segura de lecturas */
+/* V6.4 · bloqueo general + optimización segura de lecturas */
 #general-block-dialog {
   width: min(560px, calc(100vw - 28px));
 }
@@ -1795,4 +1795,62 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+/* =========================================================
+   V6.4 · AJUSTES VISUALES Y DIVISIÓN DE TURNOS
+   ========================================================= */
+
+/* Plantas un poco más visibles sin competir con las reservaciones. */
+.room-heads span.plant-high {
+  background-color: rgba(69, 132, 151, .13);
+}
+
+.room-heads span.plant-low {
+  background-color: rgba(177, 129, 72, .15);
+}
+
+.lane.plant-high {
+  background-color: rgba(69, 132, 151, .055);
+}
+
+.lane.plant-low {
+  background-color: rgba(177, 129, 72, .065);
+}
+
+/* Sábado ligeramente más oscuro. */
+.day-column.saturday {
+  background: #eef1f1;
+}
+
+.day-head.saturday .day-title {
+  background: #ecefef;
+}
+
+.day-head.saturday .room-heads {
+  background: #e8ecec;
+}
+
+.day-column.saturday .lane.plant-high {
+  background-color: rgba(69, 132, 151, .075);
+}
+
+.day-column.saturday .lane.plant-low {
+  background-color: rgba(177, 129, 72, .085);
+}
+
+/* Separación visual entre turno matutino y vespertino a las 15:00. */
+.shift-divider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  border-top: 2px solid rgba(70, 87, 90, .34);
+  pointer-events: none;
+}
+
+/* La persona a quien se le apartó contrasta con el nombre del evento. */
+.booking .booking-person {
+  color: #71364f;
+  font-weight: 800;
 }
