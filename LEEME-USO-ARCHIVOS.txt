@@ -1,0 +1,37 @@
+PAQUETE DE IDENTIDAD DIN — DIVISIÓN INDUSTRIAL, TURNO MATUTINO
+
+1) logo-din-horizontal.png
+   Logo completo horizontal con fondo transparente.
+   Úsalo en el encabezado de Perfil DIN, Consulta DIN y Agenda Salas DIN.
+
+2) icon-din.png
+   Icono cuadrado principal con DIN.
+   Úsalo para tarjetas, accesos directos, mosaicos o como imagen general del sistema.
+
+3) favicon.ico
+   Favicon universal del navegador. Contiene varios tamaños.
+   Colócalo en la raíz del sitio y enlázalo desde <head>.
+
+4) favicon-32x32.png
+   Favicon PNG de 32x32 px.
+   Recomendado para pestañas de navegador modernas.
+
+5) favicon-16x16.png
+   Favicon PNG de 16x16 px.
+   Compatibilidad con navegadores y pestañas pequeñas.
+
+6) apple-touch-icon.png
+   Icono 180x180 px.
+   Para cuando una página se guarda en la pantalla de inicio de iPhone/iPad.
+
+7) icon-192.png
+   Icono 192x192 px.
+   Para Android/PWA y accesos directos.
+
+8) icon-512.png
+   Icono 512x512 px.
+   Para Android/PWA, instalación y miniaturas de alta resolución.
+
+RECOMENDACIÓN:
+Usa exactamente los mismos favicons e iconos en Perfil DIN, Consulta DIN y Agenda Salas DIN.
+Solo cambia el nombre/título de cada página. Así las tres conservan una identidad común.
