@@ -1,0 +1,29 @@
+VALIDACIÓN LOCAL · AGENDA AUDIOVISUALES DIN V6.5
+=================================================
+
+BASE
+- Construida sobre V6.4.1 publicada.
+- firebase.js: idéntico byte/lógica a V6.4.1.
+- core.js: idéntico byte/lógica a V6.4.1.
+- firestore.rules: idéntico a V6.4.1.
+
+PRUEBAS EJECUTADAS
+- node --check app.js: OK
+- node --check storage.js: OK
+- node --check core.js: OK
+- node --check realtime.js: OK
+- npm test / core.test.js: 5/5 OK
+
+COMPROBACIONES
+- index.html referencia app.js?v=6.5 y styles.css?v=6.5.
+- app.js referencia core/storage/firebase/realtime V6.5.
+- storage.js mantiene consultas por rango de fecha, no historial completo en la agenda normal.
+- storage.js ya no contiene presenceCollection ni listeners Firestore de agenda.
+- app.js ya no llama setPresence/subscribePresence/subscribeAgendaChanges de Firestore.
+- No existe delete físico de bookings.
+- No existe migración masiva.
+- Assets DIN incluidos.
+
+NOTA
+La sintaxis/permiso efectivo de Realtime Database debe publicarse en Firebase Console mediante
+`database.rules.json`. La página degrada de forma segura si RTDB aún no está disponible.

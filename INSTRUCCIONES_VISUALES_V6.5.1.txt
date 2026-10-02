@@ -1,0 +1,23 @@
+ACTUALIZACIÓN V6.5.1 · IDENTIDAD DIN
+
+Si ya instalaste V6.5, esta revisión es visual y de recursos estáticos.
+
+SUSTITUIR EN GITHUB:
+- index.html
+- styles.css
+- app.js (solo cambia versión de caché/imports)
+- storage.js (solo cambia versión de caché/imports)
+- manifest.webmanifest
+- carpeta assets completa
+
+SE CONSERVAN SIN CAMBIOS FUNCIONALES:
+- core.js
+- firebase.js
+- realtime.js
+- firestore.rules
+- database.rules.json
+
+NO HAY QUE CAMBIAR REGLAS EN FIREBASE NI REALTIME DATABASE PARA ESTA MEJORA VISUAL.
+NO MODIFICAR .github/workflows/deploy-pages.yml.
+
+Después del commit espera GitHub Pages y haz Ctrl+F5 una sola vez.

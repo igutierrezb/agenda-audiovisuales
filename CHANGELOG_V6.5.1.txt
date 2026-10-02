@@ -1,0 +1,20 @@
+AGENDA AUDIOVISUALES DIN · V6.5.1
+
+MEJORA VISUAL DE IDENTIDAD DIN
+- Se integró exactamente el paquete de iconografía DIN proporcionado por el usuario.
+- Se sustituyeron logo horizontal, icono principal, favicon, Apple Touch Icon e iconos 192/512.
+- Nueva portada alineada con la paleta azul/cian/acero del logotipo DIN.
+- Encabezado institucional más claro y con mayor contraste.
+- Hero de agenda con marca DIN de fondo sin interferir con los controles.
+- Mayor contraste en títulos, etiquetas, textos auxiliares y formularios.
+- Planta Baja y Planta Alta mantienen diferenciación visual dentro de la misma paleta DIN.
+- Sábado y división de turno a las 15:00 permanecen visibles.
+- Se añadió manifest.webmanifest para accesos directos/PWA.
+
+PRESERVACIÓN
+- No se modificó ninguna estructura de datos.
+- No se modifica Firestore.
+- No se modifica Realtime Database.
+- No se modifican permisos ni reglas.
+- No se elimina ni migra información.
+- La lógica V6.5 de optimización y sincronización se conserva.

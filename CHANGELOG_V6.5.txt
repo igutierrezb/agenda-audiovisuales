@@ -1,0 +1,40 @@
+AGENDA AUDIOVISUALES DIN · CAMBIOS V6.5
+=======================================
+
+ARQUITECTURA / CONSUMO
+- Firestore deja de utilizarse para presence.
+- Se eliminan los listeners Firestore de cambios recientes de bookings/roomBlocks.
+- Realtime Database gestiona presencia y señales ligeras.
+- Los cambios remotos leen por getDoc únicamente el booking/roomBlock afectado.
+- Con un solo usuario activo no hay listener de cambios de agenda.
+- Inactividad: 2 min 30 s.
+- Al reactivarse se consultan señales pendientes, no toda la semana.
+- La semana visible continúa siendo la única carga operativa de bookings/roomBlocks.
+- El botón Semana evita una lectura si ya está mostrando la semana actual.
+- El resumen administrativo reutiliza la consulta mensual para calcular la semana cuando es posible.
+- La administración de salas deja de releer rooms/settings y rooms por duplicado.
+- Guardar configuración solo recarga la semana si realmente cambió el rango visible de días.
+
+SEGURIDAD / DATOS
+- Sin migración masiva.
+- bookings intactos.
+- hourLocks intactos.
+- locks legacy intactos.
+- roomBlocks intactos.
+- auditLogs intactos.
+- firestore.rules compatible con V6.4.1 y sin cambios.
+- firebase.js y core.js sin cambios.
+
+IDENTIDAD VISUAL DIN
+- Logo DIN horizontal en acceso.
+- Icono DIN en encabezado.
+- Favicons e iconos DIN.
+- Portada renovada con tonos azul industrial + acento ámbar.
+- Mayor contraste tipográfico.
+- Plantas alta/baja mejor diferenciadas.
+- Sábado ligeramente más oscuro.
+- Línea de 15:00 reforzada como división matutino/vespertino.
+- Maestro/persona a quien se le apartará con contraste visual propio.
+
+DEPLOY
+- deploy-pages.yml no cambia.

@@ -1,0 +1,94 @@
+AGENDA DE SALAS AUDIOVISUALES DIN · V6.5
+==========================================
+
+OBJETIVO
+- Preservar íntegramente los datos existentes de Firestore.
+- Reducir lecturas/escrituras innecesarias de Firestore.
+- Mantener validación transaccional de empalmes mediante hourLocks.
+- Conservar bitácora, usuarios, salas, bloqueos e historial.
+- Usar Realtime Database SOLO para presencia y avisos efímeros entre usuarios.
+- Aplicar identidad visual DIN sin alterar los datos guardados.
+
+IMPORTANTE · NO HAY MIGRACIÓN DE DATOS
+V6.5 NO borra, mueve ni reescribe masivamente:
+- bookings
+- hourLocks
+- locks legacy
+- roomBlocks
+- rooms
+- authorizedUsers
+- auditLogs
+- settings
+
+FIRESTORE
+- firestore.rules de V6.4.1 sigue siendo compatible y se entrega sin cambios.
+- NO es necesario volver a publicar firestore.rules si ya tienes la V6.4.1 funcionando.
+- V6.5 deja de utilizar la colección presence de Firestore.
+
+REALTIME DATABASE · PASO NUEVO
+Para habilitar la sincronización puntual multiusuario:
+1. Firebase Console > proyecto agenda-audiovisuales-din.
+2. Build > Realtime Database > Crear base de datos.
+3. Si Firebase permite usar la base predeterminada de EE. UU., la URL esperada es:
+   https://agenda-audiovisuales-din-default-rtdb.firebaseio.com
+4. Realtime Database > Reglas.
+5. Sustituye las reglas por el contenido de database.rules.json y pulsa PUBLICAR.
+6. Si Firebase te muestra una URL de Realtime Database DIFERENTE, abre realtime.js y cambia
+   únicamente la constante REALTIME_DATABASE_URL por esa URL exacta.
+
+Si Realtime Database todavía no está creada o su URL no coincide, la agenda NO bloquea el acceso:
+seguirá permitiendo reservar y validará empalmes en Firestore, pero mostrará modo eficiente sin
+sincronización puntual entre usuarios hasta completar este paso.
+
+ARCHIVOS A SUSTITUIR EN GITHUB
+1. index.html
+2. app.js
+3. storage.js
+4. styles.css
+5. package.json (recomendado para que el repositorio marque 6.5.0)
+
+ARCHIVOS NUEVOS A AGREGAR EN GITHUB
+6. realtime.js
+7. database.rules.json
+8. carpeta assets/ completa:
+   - logo-din-horizontal.png
+   - icon-din.png
+   - favicon.ico
+   - favicon-16x16.png
+   - favicon-32x32.png
+   - apple-touch-icon.png
+   - icon-192.png
+   - icon-512.png
+
+NO MODIFICAR
+- firebase.js
+- core.js
+- credenciales de Firebase
+- projectId
+- colecciones existentes
+- .github/workflows/deploy-pages.yml
+
+ORDEN RECOMENDADO
+1. Crear/configurar Realtime Database y publicar database.rules.json.
+2. Sustituir/agregar los archivos de GitHub indicados arriba.
+3. Commit changes.
+4. Esperar a que GitHub Pages publique.
+5. Abrir la página y hacer Ctrl+F5 una sola vez.
+6. Probar con dos cuentas autorizadas abiertas en navegadores distintos.
+
+PRUEBA MULTIUSUARIO
+- Con una sola cuenta debe verse “1 usuario activo”.
+- Con dos cuentas activas debe verse “Multiusuario · 2 activos · cambios puntuales”.
+- Guarda una reservación con una cuenta.
+- La otra debe recibir únicamente el cambio de ese booking, no volver a descargar toda la semana.
+- Tras 2 min 30 s sin interacción, la sesión queda inactiva para sincronización puntual.
+- Al volver a interactuar, se recuperan solamente las entidades que cambiaron durante la pausa.
+
+CONSUMO
+- Abrir/capturar un formulario no escribe en Firestore.
+- Una reservación nueva sigue validándose con transacción y hourLocks.
+- Presencia y señales ya no consumen lecturas/escrituras de Firestore.
+- Cambios remotos disparan getDoc solo del booking o roomBlock afectado.
+
+DEPLOY
+.github/workflows/deploy-pages.yml NO requiere modificación.

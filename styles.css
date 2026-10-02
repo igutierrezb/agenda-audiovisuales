@@ -1,12 +1,15 @@
 :root {
   font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Aptos", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-  color: #203438;
-  background: #f3f6f7;
+  color: #1b3039;
+  background: #edf2f4;
   font-synthesis: none;
-  --ink: #123d42;
-  --ink-2: #1d555b;
-  --muted: #64777b;
-  --line: #e0e8e9;
+  --ink: #102934;
+  --ink-2: #1a4351;
+  --muted: #52646d;
+  --line: #d2dce0;
+  --din-accent: #d58a1e;
+  --din-accent-soft: #f2dfbf;
+  --din-navy: #0d202b;
   --slot: 48px;
   --busy-red: #f3c4bc;
   --busy-red-hover: #ebb0a6;
@@ -1853,4 +1856,616 @@ button:disabled {
 .booking .booking-person {
   color: #71364f;
   font-weight: 800;
+}
+
+
+/* =========================================================
+   V6.5 · IDENTIDAD DIN + CONTRASTE + PORTADA
+   ========================================================= */
+
+body {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(213, 138, 30, .07), transparent 28rem),
+    #edf2f4;
+  color: #1b3039;
+}
+
+.topbar {
+  background: rgba(255, 255, 255, .97);
+  border-bottom: 1px solid #cbd7db;
+  box-shadow: 0 2px 14px rgba(13, 32, 43, .06);
+  position: relative;
+}
+
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--din-accent) 18%, var(--din-accent) 36%, transparent 60%);
+  opacity: .72;
+  pointer-events: none;
+}
+
+.brand-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 11px;
+  box-shadow: 0 3px 12px rgba(13, 32, 43, .18);
+  flex: 0 0 auto;
+}
+
+.brand {
+  color: #142e39;
+}
+
+.brand small {
+  color: #102934;
+  font-weight: 760;
+}
+
+.brand em {
+  color: #4a5e67;
+  font-weight: 680;
+}
+
+main {
+  padding-top: 18px;
+}
+
+.intro {
+  padding: 16px 18px;
+  border: 1px solid #d5dfe2;
+  border-left: 4px solid var(--din-accent);
+  border-radius: 14px;
+  background:
+    linear-gradient(100deg, rgba(255,255,255,.98), rgba(246,249,250,.95));
+  box-shadow: 0 5px 22px rgba(13, 32, 43, .05);
+}
+
+.eyebrow {
+  color: #315763;
+  font-weight: 800;
+}
+
+.subtitle,
+.calendar-toolbar p,
+.legend,
+.dialog-help,
+.page-footer,
+.auth-card p:not(.eyebrow) {
+  color: #52646d;
+}
+
+label,
+fieldset legend {
+  color: #17343f;
+  font-weight: 690;
+}
+
+input,
+select,
+textarea {
+  color: #142b35;
+}
+
+button {
+  color: #12303b;
+  border-color: #cbd7db;
+}
+
+.primary {
+  background: #102934;
+  border-color: #102934;
+  color: #fff;
+  box-shadow: inset 0 -2px 0 rgba(213, 138, 30, .44);
+}
+
+.primary:hover {
+  background: #173d4a;
+}
+
+.workspace {
+  border-color: #ccd8dc;
+  box-shadow: 0 8px 32px rgba(13, 32, 43, .075);
+}
+
+.room-tabs button {
+  color: #294751;
+  background: #eef3f4;
+  font-weight: 720;
+}
+
+.room-tabs button[aria-pressed=true] {
+  background: #102934;
+  color: #fff;
+  box-shadow: inset 0 -2px 0 var(--din-accent);
+}
+
+.day-title,
+.time-label,
+.calendar-footer,
+.availability-status {
+  color: #425861;
+}
+
+.day-title strong {
+  color: #102934;
+  font-weight: 800;
+}
+
+/* Las dos salas mantienen identificación visible y sobria. */
+.room-heads span.plant-low {
+  background-color: rgba(196, 131, 38, .20);
+  color: #67400d;
+  font-weight: 800;
+}
+
+.room-heads span.plant-high {
+  background-color: rgba(42, 106, 132, .18);
+  color: #194a5d;
+  font-weight: 800;
+}
+
+.lane.plant-low {
+  background-color: rgba(196, 131, 38, .075);
+}
+
+.lane.plant-high {
+  background-color: rgba(42, 106, 132, .065);
+}
+
+/* Sábado apenas más oscuro, sin competir con eventos. */
+.day-column.saturday {
+  background: #e7ebed;
+}
+
+.day-head.saturday .day-title {
+  background: #e3e8ea;
+}
+
+.day-head.saturday .room-heads {
+  background: #e0e6e8;
+}
+
+/* División de turnos más clara a las 15:00. */
+.shift-divider {
+  border-top: 2px solid rgba(213, 138, 30, .52);
+  box-shadow: 0 -1px 0 rgba(16, 41, 52, .10);
+}
+
+.booking .booking-title {
+  color: var(--booking-ink, #172f39);
+  font-weight: 850;
+}
+
+.booking .booking-person {
+  color: #8a4d0d;
+  font-weight: 850;
+}
+
+.booking .booking-meta,
+.booking .booked-by,
+.booking .edited-by {
+  color: #314a54;
+  opacity: 1;
+}
+
+.auth-screen {
+  background:
+    radial-gradient(circle at 16% 15%, rgba(213, 138, 30, .28), transparent 24rem),
+    radial-gradient(circle at 84% 86%, rgba(57, 112, 132, .24), transparent 28rem),
+    linear-gradient(145deg, #091821 0%, #102c38 48%, #1b3e49 100%);
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  padding: 30px 42px 34px;
+  border: 1px solid rgba(255,255,255,.75);
+  background: rgba(252, 253, 253, .98);
+  box-shadow: 0 28px 90px rgba(0,0,0,.35);
+  overflow: hidden;
+  position: relative;
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #183947, var(--din-accent), #183947);
+}
+
+.auth-logo {
+  display: block;
+  width: min(350px, 88%);
+  height: auto;
+  margin: -4px auto 6px;
+  filter: drop-shadow(0 6px 10px rgba(13, 32, 43, .10));
+}
+
+.auth-card h1 {
+  color: #102934;
+  font-weight: 780;
+  letter-spacing: -.9px;
+}
+
+.auth-card .eyebrow {
+  color: #47616b;
+  margin-top: 4px;
+}
+
+.auth-card small {
+  color: #64757d;
+}
+
+.auth-credit {
+  color: #53666e !important;
+}
+
+.sync-status {
+  font-weight: 720;
+}
+
+.page-footer {
+  color: #53666e;
+}
+
+@media (max-width: 760px) {
+  .brand-logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .auth-card {
+    padding: 26px 24px 30px;
+  }
+
+  .auth-logo {
+    width: min(310px, 94%);
+  }
+
+  .intro {
+    padding: 14px;
+  }
+}
+
+
+/* =========================================================
+   V6.5.1 · IDENTIDAD DIN OFICIAL (mejora visual únicamente)
+   Usa los recursos proporcionados en Paquete_DIN_web.
+   No modifica lógica, datos, permisos ni comportamiento Firestore/RTDB.
+   ========================================================= */
+
+:root {
+  --din-navy: #071b2e;
+  --din-navy-2: #0b2f55;
+  --din-blue: #0b69b4;
+  --din-cyan: #14b9e8;
+  --din-cyan-soft: #dff7fd;
+  --din-steel: #9fb1bd;
+  --din-silver: #dce5ea;
+  --din-accent: #0b8fc8;
+  --din-accent-soft: #d8f2fb;
+  --ink: #0d2a3a;
+  --ink-2: #12445d;
+  --muted: #455f6c;
+  --line: #c8d7df;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% -4%, rgba(20,185,232,.12), transparent 28rem),
+    radial-gradient(circle at 100% 15%, rgba(11,105,180,.08), transparent 30rem),
+    #edf3f6;
+  color: #16313f;
+}
+
+/* Encabezado institucional: mayor presencia DIN sin perder espacio útil. */
+.topbar {
+  min-height: 76px;
+  background: linear-gradient(100deg, rgba(255,255,255,.99), rgba(246,251,253,.98));
+  border-bottom-color: #bdd0da;
+  box-shadow: 0 4px 22px rgba(7,27,46,.08);
+}
+
+.topbar::after {
+  height: 3px;
+  background: linear-gradient(90deg,
+    var(--din-navy) 0%,
+    var(--din-blue) 26%,
+    var(--din-cyan) 50%,
+    var(--din-blue) 74%,
+    var(--din-navy) 100%);
+  opacity: .9;
+}
+
+.brand {
+  gap: 14px;
+  color: var(--din-navy);
+  letter-spacing: .9px;
+}
+
+.brand-logo {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: 0 6px 18px rgba(7,27,46,.20);
+}
+
+.brand b {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 1.35px;
+  color: #1a536d;
+}
+
+.brand small {
+  margin-top: 2px;
+  color: #08283a;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.brand em {
+  color: #48636f;
+  font-weight: 720;
+}
+
+/* Hero de agenda con iconografía DIN real. */
+.intro-din {
+  min-height: 116px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(20,93,130,.30);
+  border-left: 5px solid var(--din-cyan);
+  background:
+    linear-gradient(112deg, rgba(6,28,47,.98) 0%, rgba(10,57,91,.96) 55%, rgba(12,91,132,.94) 100%);
+  box-shadow: 0 10px 30px rgba(7,27,46,.14);
+}
+
+.intro-din::before {
+  content: '';
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  right: 9%;
+  top: -245px;
+  border: 46px solid rgba(255,255,255,.045);
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.intro-din::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--din-cyan), transparent);
+  opacity: .75;
+}
+
+.intro-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 860px;
+}
+
+.intro-din .eyebrow {
+  color: #8ce7fb;
+  font-weight: 850;
+  text-shadow: 0 1px 0 rgba(0,0,0,.15);
+}
+
+.intro-din h1 {
+  margin-top: 2px;
+  color: #ffffff;
+  font-weight: 820;
+  letter-spacing: -.55px;
+}
+
+.intro-din .subtitle {
+  color: #d9edf5;
+  font-weight: 600;
+  max-width: 740px;
+}
+
+.intro-din-mark {
+  position: absolute;
+  right: 150px;
+  top: 50%;
+  width: 164px;
+  height: 164px;
+  object-fit: cover;
+  transform: translateY(-50%);
+  opacity: .14;
+  filter: saturate(1.15) brightness(1.2);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.intro-din .intro-actions {
+  position: relative;
+  z-index: 3;
+}
+
+.intro-din .intro-actions .quiet {
+  color: #eaf8fc;
+  border-color: rgba(222,246,252,.48);
+  background: rgba(255,255,255,.08);
+}
+
+.intro-din .intro-actions .quiet:hover {
+  background: rgba(255,255,255,.15);
+}
+
+.intro-din .intro-actions .primary {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #07314a;
+  box-shadow: 0 5px 16px rgba(0,0,0,.18), inset 0 -3px 0 rgba(20,185,232,.55);
+}
+
+.intro-din .intro-actions .primary:hover {
+  background: #e9f8fc;
+}
+
+/* Mayor contraste general solicitado. */
+.eyebrow { color: #1d5d77; }
+.subtitle,
+.calendar-toolbar p,
+.legend,
+.dialog-help,
+.page-footer,
+.auth-card p:not(.eyebrow) { color: #445e69; }
+
+label,
+fieldset legend { color: #0b3144; font-weight: 760; }
+
+input,
+select,
+textarea { color: #0a2a3a; border-color: #bdcfd8; }
+
+input::placeholder,
+textarea::placeholder { color: #6d828c; opacity: 1; }
+
+.calendar-period h2,
+.day-title strong,
+.time-label strong,
+.dialog-heading h2,
+.admin-card h4,
+.section-heading h3 { color: #082b3c; }
+
+.room-tabs button {
+  color: #173f52;
+  background: #e8f0f4;
+  border-color: #c6d7df;
+}
+
+.room-tabs button[aria-pressed=true] {
+  background: linear-gradient(135deg, var(--din-navy-2), var(--din-blue));
+  color: #fff;
+  box-shadow: inset 0 -3px 0 var(--din-cyan);
+}
+
+/* Salas: diferenciación sobria dentro de la paleta DIN. */
+.room-heads span.plant-low {
+  background: rgba(31, 129, 173, .20);
+  color: #0c4662;
+  border-bottom: 2px solid rgba(16, 138, 190, .45);
+}
+
+.room-heads span.plant-high {
+  background: rgba(13, 62, 108, .17);
+  color: #0a3558;
+  border-bottom: 2px solid rgba(13, 83, 145, .40);
+}
+
+.lane.plant-low { background-color: rgba(22, 157, 207, .055); }
+.lane.plant-high { background-color: rgba(14, 76, 130, .050); }
+
+.day-column.saturday { background: #dde5e9; }
+.day-head.saturday .day-title { background: #d9e2e6; }
+.day-head.saturday .room-heads { background: #d5dfe4; }
+
+.shift-divider {
+  border-top: 2px solid rgba(10, 132, 181, .62);
+  box-shadow: 0 -1px 0 rgba(7,27,46,.10), 0 1px 0 rgba(255,255,255,.65);
+}
+
+/* La persona a quien se le aparta contrasta con el título sin competir con él. */
+.booking .booking-person {
+  color: #075d86;
+  font-weight: 860;
+}
+
+.booking .booking-meta,
+.booking .booked-by,
+.booking .edited-by {
+  color: #284b5b;
+  opacity: 1;
+}
+
+/* Portada DIN usando exactamente el logo horizontal proporcionado. */
+.auth-screen {
+  background:
+    radial-gradient(circle at 13% 14%, rgba(20,185,232,.24), transparent 27rem),
+    radial-gradient(circle at 88% 82%, rgba(10,105,180,.26), transparent 31rem),
+    linear-gradient(145deg, #041522 0%, #082c4b 50%, #0a4c72 100%);
+}
+
+.auth-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.75), transparent 88%);
+}
+
+.auth-card {
+  width: min(560px, 100%);
+  padding: 30px 46px 35px;
+  border: 1px solid rgba(201,225,235,.78);
+  border-radius: 24px;
+  background: rgba(251,253,254,.985);
+  box-shadow: 0 32px 100px rgba(0,0,0,.38);
+}
+
+.auth-card::before {
+  height: 4px;
+  background: linear-gradient(90deg, var(--din-blue), var(--din-cyan), var(--din-blue));
+}
+
+.auth-logo {
+  width: min(410px, 94%);
+  margin: -8px auto 6px;
+  filter: drop-shadow(0 7px 12px rgba(7,27,46,.13));
+}
+
+.auth-card h1 { color: #082b3e; font-weight: 830; }
+.auth-card .eyebrow { color: #245c75; font-weight: 820; }
+.auth-card small { color: #566e79; }
+.auth-credit { color: #405b68 !important; }
+
+.primary {
+  background: linear-gradient(135deg, #092c4a, #0b5c8f);
+  border-color: #0a4166;
+  box-shadow: inset 0 -2px 0 rgba(20,185,232,.62);
+}
+
+.primary:hover { background: linear-gradient(135deg, #0d385a, #0b6aa2); }
+
+.sync-status { color: #173f50; font-weight: 760; }
+
+.page-footer {
+  color: #405c68;
+  border-top-color: #c5d6de;
+}
+
+@media (max-width: 980px) {
+  .intro-din-mark { right: 80px; opacity: .10; }
+}
+
+@media (max-width: 760px) {
+  .brand-logo { width: 43px; height: 43px; }
+  .brand b { font-size: 8.5px; }
+  .brand small { font-size: 13.5px; }
+  .brand em { font-size: 10px; }
+  .intro-din { min-height: auto; padding: 17px 15px; }
+  .intro-din-mark { right: -28px; width: 150px; height: 150px; opacity: .08; }
+  .auth-card { padding: 26px 22px 30px; }
+  .auth-logo { width: min(390px, 98%); }
 }

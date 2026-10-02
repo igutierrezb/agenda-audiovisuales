@@ -3,37 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#123d42">
+  <meta name="theme-color" content="#0f2430">
   <meta name="description" content="Agenda semanal de reservación de salas audiovisuales de la División Industrial.">
-  <title>Reservación de Salas Audiovisuales · División Industrial</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23123d42'/%3E%3Cpath d='M8 10h16v15H8zM11 7v6m10-6v6M8 16h16' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=6.4.1">
+  <title>Agenda de Salas Audiovisuales DIN · División Industrial</title>
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css?v=6.5.1">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script type="module" src="app.js?v=6.4.1"></script>
+  <script type="module" src="app.js?v=6.5.1"></script>
 </head>
 
 <body class="auth-pending">
 
   <section id="auth-screen" class="auth-screen" aria-live="polite">
     <div class="auth-card">
-      <span class="auth-icon" aria-hidden="true">▦</span>
-      <p class="eyebrow">DIVISIÓN INDUSTRIAL</p>
-      <h1>Reservación de Salas Audiovisuales</h1>
+      <img class="auth-logo" src="assets/logo-din-horizontal.png" alt="DIN · División Industrial · Turno Matutino">
+      <p class="eyebrow">DIVISIÓN INDUSTRIAL · TURNO MATUTINO</p>
+      <h1>Agenda de Salas Audiovisuales</h1>
       <p id="auth-message">Inicia sesión con una cuenta autorizada para consultar y modificar la agenda compartida.</p>
       <button id="sign-in" class="primary auth-button">Iniciar sesión con Google</button>
       <button id="auth-sign-out" class="quiet auth-button" hidden>Cerrar sesión</button>
-      <small>Agenda optimizada con sincronización puntual entre usuarios.</small>
+      <small>Sincronización puntual: Firestore conserva los datos y la agenda solo recibe cambios necesarios.</small>
       <small class="auth-credit">Elaborada y administrada por Iván Gutiérrez Bautista</small>
     </div>
   </section>
 
   <header class="topbar">
-    <a class="brand" href="./">
-      <span class="brand-icon" aria-hidden="true">▦</span>
+    <a class="brand" href="./" aria-label="Agenda de Salas Audiovisuales DIN">
+      <img class="brand-logo" src="assets/icon-din.png" alt="">
       <span>
-        ESPACIOS ACADÉMICOS
-        <small>Reservación de Salas Audiovisuales</small>
-        <em>División Industrial</em>
+        <b>DIN · DIVISIÓN INDUSTRIAL</b>
+        <small>Agenda de Salas Audiovisuales</small>
+        <em>Turno Matutino · UTEQ</em>
       </span>
     </a>
 
@@ -46,11 +50,12 @@
   </header>
 
   <main>
-    <section class="intro">
-      <div>
-        <p class="eyebrow">AGENDA DE RESERVACIONES</p>
-        <h1>Un espacio para cada actividad.</h1>
-        <p class="subtitle">Consulta la disponibilidad y reserva tu sala.</p>
+    <section class="intro intro-din">
+      <img class="intro-din-mark" src="assets/icon-din.png" alt="" aria-hidden="true">
+      <div class="intro-copy">
+        <p class="eyebrow">DIN · AGENDA DE RESERVACIONES</p>
+        <h1>Salas audiovisuales · División Industrial</h1>
+        <p class="subtitle">Consulta disponibilidad y reserva espacios con una agenda compartida, clara y sincronizada.</p>
       </div>
       <div class="intro-actions">
         <button id="block-room" class="quiet">Bloquear sala</button>
@@ -95,7 +100,7 @@
     </section>
 
     <footer class="page-footer">
-      <span>Reservación de Salas Audiovisuales · División Industrial</span>
+      <span>Agenda de Salas Audiovisuales DIN · División Industrial</span>
       <span>Sitio elaborado por Iván Gutiérrez Bautista · Jefe de Unidad de Coordinación Académica · División Industrial · Turno Matutino</span>
     </footer>
 

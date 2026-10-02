@@ -1,8 +1,9 @@
-import { DEFAULT_SETTINGS, normalizeSettings, minutes, timeLabel, dateKey, parseDate, monday, addDays } from './core.js?v=6.0';
-import { repository } from './storage.js?v=6.4';
-import { authService, OWNER_EMAIL } from './firebase.js?v=4.1';
+import { DEFAULT_SETTINGS, normalizeSettings, minutes, timeLabel, dateKey, parseDate, monday, addDays } from './core.js?v=6.5.1';
+import { repository } from './storage.js?v=6.5.1';
+import { authService, OWNER_EMAIL } from './firebase.js?v=6.5.1';
+import { collaboration } from './realtime.js?v=6.5.1';
 
-// V6.4.1 · Carga semanal puntual, candados por hora y sincronización mínima entre usuarios.
+// V6.5 · Firestore como fuente de verdad + presencia/señales efímeras en Realtime Database.
 
 // Densidad visual del calendario: cada bloque representa 30 minutos.
 const SLOT_HEIGHT = 48;
@@ -259,12 +260,9 @@ let currentBooking = null;
 let confirmAction = null;
 let noticeTimer = null;
 let currentUser = null;
-let unsubscribeAgendaChanges = null;
-let unsubscribePresence = null;
-let presenceIdleTimer = null;
 let localPresenceActive = false;
 let activePeerCount = 0;
-const PRESENCE_IDLE_MS = 150000;
+let collaborationAvailable = true;
 let dragState = null;
 let bookingDragState = null;
 let suppressBookingClick = false;
@@ -1682,17 +1680,32 @@ async function loadAdminSummary() {
     const weekStart = dateKey(monday(now));
     const weekEnd = dateKey(addDays(monday(now), 5));
 
-    const [monthBookings, weekBookings] =
-      await Promise.all([
-        repository.queryBookingsRange(
-          month.first,
-          month.last
-        ),
-        repository.queryBookingsRange(
-          weekStart,
-          weekEnd
-        )
-      ]);
+    const monthBookings = await repository.queryBookingsRange(
+      month.first,
+      month.last
+    );
+
+    // V6.5: la semana normalmente se deriva de los datos del mes ya leídos.
+    // Solo se consulta el fragmento que cae fuera del mes en semanas de cambio mensual.
+    let weekBookings = monthBookings.filter(booking =>
+      booking.date >= weekStart && booking.date <= weekEnd
+    );
+
+    if (weekStart < month.first) {
+      const previousMonthTail = await repository.queryBookingsRange(
+        weekStart,
+        dateKey(addDays(parseDate(month.first), -1))
+      );
+      weekBookings = [...previousMonthTail, ...weekBookings];
+    }
+
+    if (weekEnd > month.last) {
+      const nextMonthHead = await repository.queryBookingsRange(
+        dateKey(addDays(parseDate(month.last), 1)),
+        weekEnd
+      );
+      weekBookings = [...weekBookings, ...nextMonthHead];
+    }
 
     const activeMonth =
       monthBookings.filter(booking =>
@@ -2177,73 +2190,61 @@ function populateBlockFormOptions() {
   updateBlockModeUI();
 }
 
+function renderAdminRoomLists() {
+  adminRooms = [...state.rooms].sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'es')
+  );
+
+  const active = adminRooms.filter(room => room.active !== false);
+  const archived = adminRooms.filter(room => room.active === false);
+
+  $('#rooms-active-list').innerHTML = active.length
+    ? active.map(room => roomAdminRow(room, false)).join('')
+    : '<p class="empty-mini">No hay salas activas.</p>';
+
+  $('#rooms-archived-list').innerHTML = archived.length
+    ? archived.map(room => roomAdminRow(room, true)).join('')
+    : '<p class="empty-mini">No hay salas archivadas.</p>';
+
+  populateBlockFormOptions();
+}
+
+async function loadAdminRoomBlocks() {
+  if (!authService.isOwner(currentUser)) return;
+
+  const now = new Date();
+  const from = dateKey(new Date(now.getFullYear(), now.getMonth(), 1, 12));
+  const to = dateKey(addDays(now, 90));
+  const blocks = (await repository.queryBlocksRange(from, to))
+    .filter(block => block.active !== false);
+
+  $('#blocks-list').innerHTML = blocks.length
+    ? blocks.map(block => `
+        <div class="compact-row">
+          <div>
+            <strong>${escape(block.date)} · ${escape(block.start)}–${escape(block.end)}</strong>
+            <span>${escape(roomShort(block.roomId))}</span>
+            <small>${escape(block.reason || 'Mantenimiento')}</small>
+          </div>
+          <button
+            type="button"
+            class="danger"
+            data-block-remove="${escape(block.id)}"
+            data-mutation>
+            Quitar
+          </button>
+        </div>
+      `).join('')
+    : '<p class="empty-mini">No hay bloqueos próximos.</p>';
+}
+
 async function loadAdminRooms() {
   if (!authService.isOwner(currentUser)) return;
 
   try {
-    adminRooms = await repository.listRooms();
-
-    const active =
-      adminRooms.filter(room =>
-        room.active !== false
-      );
-
-    const archived =
-      adminRooms.filter(room =>
-        room.active === false
-      );
-
-    $('#rooms-active-list').innerHTML =
-      active.length
-        ? active.map(room =>
-            roomAdminRow(room, false)
-          ).join('')
-        : '<p class="empty-mini">No hay salas activas.</p>';
-
-    $('#rooms-archived-list').innerHTML =
-      archived.length
-        ? archived.map(room =>
-            roomAdminRow(room, true)
-          ).join('')
-        : '<p class="empty-mini">No hay salas archivadas.</p>';
-
-    populateBlockFormOptions();
-
-    const now = new Date();
-    const from = dateKey(
-      new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1,
-        12
-      )
-    );
-
-    const to = dateKey(addDays(now, 90));
-    const blocks =
-      (await repository.queryBlocksRange(from, to))
-        .filter(block => block.active !== false);
-
-    $('#blocks-list').innerHTML =
-      blocks.length
-        ? blocks.map(block => `
-            <div class="compact-row">
-              <div>
-                <strong>${escape(block.date)} · ${escape(block.start)}–${escape(block.end)}</strong>
-                <span>${escape(roomShort(block.roomId))}</span>
-                <small>${escape(block.reason || 'Mantenimiento')}</small>
-              </div>
-              <button
-                type="button"
-                class="danger"
-                data-block-remove="${escape(block.id)}"
-                data-mutation>
-                Quitar
-              </button>
-            </div>
-          `).join('')
-        : '<p class="empty-mini">No hay bloqueos próximos.</p>';
-
+    // V6.5: las salas ya están en memoria desde loadStatic(); no se vuelven a leer.
+    renderAdminRoomLists();
+    await loadAdminRoomBlocks();
     updateMutationAvailability();
   } catch (error) {
     $('#room-error').textContent = error.message;
@@ -2433,23 +2434,23 @@ function realtimeError(error) {
   );
 }
 
-// V6.4.1 · La presencia/multiusuario es auxiliar.
-// Un fallo de permisos en presencia NUNCA debe bloquear el acceso a la agenda.
+// V6.5 · Presencia y señalización salen de Firestore.
+// Un fallo de Realtime Database nunca bloquea la agenda ni la autenticación.
 function collaborationError(error) {
   console.warn('Sincronización multiusuario no disponible:', error);
-  stopCollaborationLocal();
-  if (isOnline) {
-    $('#sync-status').textContent = '● Modo eficiente · sincronización puntual no disponible';
-    $('#sync-status').classList.remove('online');
-  }
+  collaborationAvailable = false;
+  activePeerCount = 0;
+  localPresenceActive = false;
+  updateRealtimeStatus();
 }
 
-async function signalSuccessfulAgendaMutation() {
-  try {
-    await activatePresence();
-  } catch (error) {
-    collaborationError(error);
-  }
+function currentVisibleDateKeys() {
+  return Array.from({ length: 6 }, (_, index) => dateKey(addDays(week, index)));
+}
+
+function signalSuccessfulAgendaMutation(signal) {
+  if (!signal?.id || !signal?.date) return;
+  void collaboration.broadcast(signal);
 }
 
 function updateRealtimeStatus() {
@@ -2459,8 +2460,14 @@ function updateRealtimeStatus() {
     return;
   }
 
+  if (!collaborationAvailable) {
+    $('#sync-status').textContent = '● Modo eficiente · agenda disponible';
+    $('#sync-status').classList.remove('online');
+    return;
+  }
+
   if (!localPresenceActive) {
-    $('#sync-status').textContent = '● Modo eficiente · tiempo real pausado';
+    $('#sync-status').textContent = '● Modo eficiente · sincronización pausada';
     $('#sync-status').classList.remove('online');
     return;
   }
@@ -2489,160 +2496,86 @@ function upsertBookingLocal(booking) {
 function upsertBlockLocal(block) {
   if (!block?.id) return;
   state.blocks = state.blocks.filter(item => item.id !== block.id);
-  if (dateInVisibleRange(block.date)) state.blocks.push(block);
+  if (block.active !== false && dateInVisibleRange(block.date)) state.blocks.push(block);
 }
 
-async function refreshStaticState() {
-  const next = await repository.loadStatic();
-  state = {
-    ...state,
-    rooms: next.rooms,
-    settings: normalizeSettings(next.settings)
-  };
-  render();
+function upsertRoomLocal(room) {
+  if (!room?.id) return;
+  state.rooms = state.rooms.filter(item => item.id !== room.id);
+  state.rooms.push(room);
+  state.rooms.sort((a, b) => {
+    const rank = value => {
+      const text = `${value?.id || ''} ${value?.name || ''} ${value?.short || ''}`.toLocaleLowerCase('es-MX');
+      if (text.includes('planta baja') || text.includes('baja-f') || /\bpb\b/.test(text)) return 0;
+      if (text.includes('planta alta') || text.includes('alta-f') || /\bpa\b/.test(text)) return 1;
+      return 2;
+    };
+    return rank(a) - rank(b) || String(a.name || '').localeCompare(String(b.name || ''), 'es');
+  });
 }
 
-function applyRemoteChanges(changeSet) {
-  const ownEmail = String(currentUser?.email || '').toLowerCase();
-  let visibleChange = false;
+async function applyRemoteSignal(signal) {
+  if (!currentUser || !signal?.entity || !signal?.id) return;
 
-  for (const booking of changeSet?.bookings || []) {
-    const actor = String(booking.updatedByEmail || booking.createdByEmail || '').toLowerCase();
-    if (!actor || actor === ownEmail) continue;
-
-    const existed = state.bookings.some(item => item.id === booking.id);
-    state.bookings = state.bookings.filter(item => item.id !== booking.id);
-
-    if (dateInVisibleRange(booking.date)) {
-      state.bookings.push(booking);
-      visibleChange = true;
-    } else if (existed) {
-      visibleChange = true;
+  try {
+    if (signal.entity === 'booking') {
+      const booking = await repository.getBooking(signal.id);
+      if (booking) upsertBookingLocal(booking);
+      else state.bookings = state.bookings.filter(item => item.id !== signal.id);
+    } else if (signal.entity === 'roomBlock') {
+      const block = await repository.getRoomBlock(signal.id);
+      if (block) upsertBlockLocal(block);
+      else state.blocks = state.blocks.filter(item => item.id !== signal.id);
+    } else {
+      return;
     }
+
+    render();
+  } catch (error) {
+    console.warn('No se pudo aplicar un cambio puntual:', error);
   }
-
-  for (const block of changeSet?.blocks || []) {
-    const actor = String(block.updatedByEmail || block.createdByEmail || '').toLowerCase();
-    if (!actor || actor === ownEmail) continue;
-
-    const existed = state.blocks.some(item => item.id === block.id);
-    state.blocks = state.blocks.filter(item => item.id !== block.id);
-
-    if (dateInVisibleRange(block.date)) {
-      state.blocks.push(block);
-      visibleChange = true;
-    } else if (existed) {
-      visibleChange = true;
-    }
-  }
-
-  if (visibleChange) render();
 }
 
-function stopAgendaChanges() {
-  unsubscribeAgendaChanges?.();
-  unsubscribeAgendaChanges = null;
-  updateRealtimeStatus();
-}
-
-function startAgendaChanges() {
-  if (!currentUser || !isOnline || !localPresenceActive || activePeerCount < 1) {
-    stopAgendaChanges();
+async function startCollaboration(user) {
+  collaborationAvailable = collaboration.available();
+  if (!collaborationAvailable) {
+    updateRealtimeStatus();
     return;
   }
 
-  if (unsubscribeAgendaChanges) return;
+  try {
+    const started = await collaboration.start(user, {
+      onPeerCount(count) {
+        activePeerCount = count;
+        updateRealtimeStatus();
+      },
+      onActiveChange(active) {
+        localPresenceActive = active;
+        updateRealtimeStatus();
+      },
+      onSignal(signal) {
+        void applyRemoteSignal(signal);
+      },
+      onError(error) {
+        console.warn('Realtime Database:', error);
+      }
+    });
 
-  unsubscribeAgendaChanges = repository.subscribeAgendaChanges(
-    Date.now() - 5000,
-    applyRemoteChanges,
-    collaborationError
-  );
-  updateRealtimeStatus();
-}
-
-function handlePresence(activeUsers) {
-  const ownEmail = String(currentUser?.email || '').toLowerCase();
-  const peers = new Set(
-    (activeUsers || [])
-      .filter(item => item?.active === true)
-      .map(item => String(item.email || '').toLowerCase())
-      .filter(email => email && email !== ownEmail)
-  );
-
-  activePeerCount = peers.size;
-
-  if (localPresenceActive && activePeerCount > 0) {
-    startAgendaChanges();
-  } else {
-    stopAgendaChanges();
-  }
-
-  updateRealtimeStatus();
-}
-
-function stopPresenceListener() {
-  unsubscribePresence?.();
-  unsubscribePresence = null;
-}
-
-function stopCollaborationLocal() {
-  clearTimeout(presenceIdleTimer);
-  presenceIdleTimer = null;
-  stopPresenceListener();
-  unsubscribeAgendaChanges?.();
-  unsubscribeAgendaChanges = null;
-  localPresenceActive = false;
-  activePeerCount = 0;
-  updateRealtimeStatus();
-}
-
-function armPresenceIdleTimer() {
-  if (!localPresenceActive) return;
-  clearTimeout(presenceIdleTimer);
-  presenceIdleTimer = setTimeout(() => {
-    const email = currentUser?.email;
-    stopCollaborationLocal();
-    if (email && navigator.onLine) {
-      repository.setPresence(email, false).catch(() => {});
+    if (!started) {
+      collaborationAvailable = false;
+      localPresenceActive = false;
+      activePeerCount = 0;
+      updateRealtimeStatus();
+      return;
     }
-  }, PRESENCE_IDLE_MS);
-}
 
-async function activatePresence() {
-  if (!currentUser || !isOnline) return;
-
-  if (!localPresenceActive) {
-    await repository.setPresence(currentUser.email, true);
-    localPresenceActive = true;
+    localPresenceActive = collaboration.isActive();
+    activePeerCount = collaboration.peerCount();
+    collaboration.setVisibleDates(currentVisibleDateKeys(), { fresh: true });
+    updateRealtimeStatus();
+  } catch (error) {
+    collaborationError(error);
   }
-
-  if (!unsubscribePresence) {
-    unsubscribePresence = repository.subscribePresence(
-      handlePresence,
-      collaborationError
-    );
-  }
-
-  armPresenceIdleTimer();
-  updateRealtimeStatus();
-}
-
-async function deactivatePresence(writeRemote = true) {
-  const email = currentUser?.email;
-  stopCollaborationLocal();
-
-  if (writeRemote && email && navigator.onLine) {
-    try {
-      await repository.setPresence(email, false);
-    } catch {
-      // La presencia es auxiliar: nunca debe impedir cerrar sesión o seguir usando la app.
-    }
-  }
-}
-
-async function ensureSyncChannel() {
-  await activatePresence();
 }
 
 async function refreshVisibleRange() {
@@ -2666,6 +2599,7 @@ async function refreshVisibleRange() {
     setOnlineState(navigator.onLine);
     updateRealtimeStatus();
     render();
+    collaboration.setVisibleDates(currentVisibleDateKeys(), { fresh: true });
 
     if ($('#admin-dialog').open && activeAdminTab === 'report') {
       renderReportRoomOptions();
@@ -2676,10 +2610,8 @@ async function refreshVisibleRange() {
 }
 
 async function startRealtime() {
-  // V6.4.1: al entrar solo se carga lo necesario.
-  // NO se escribe presencia ni se abre sincronización multiusuario hasta
-  // que exista una mutación de agenda confirmada por Firestore.
-  stopCollaborationLocal();
+  // V6.5: Firestore carga únicamente datos estáticos + semana visible.
+  // La presencia se gestiona fuera de Firestore mediante Realtime Database.
   $('#sync-status').textContent = '● Cargando datos';
   $('#sync-status').classList.remove('online');
 
@@ -2739,7 +2671,6 @@ document.addEventListener('click', event => {
 });
 
 window.addEventListener('offline', () => {
-  stopCollaborationLocal();
   setOnlineState(false);
   notice('Sin conexión · modo consulta');
 });
@@ -2750,9 +2681,20 @@ window.addEventListener('online', () => {
   notice('Conexión recuperada.');
 });
 
-// V6.4.1: mover el mouse, escribir o tocar la pantalla NO genera ni prolonga
-// presencia en Firebase. El temporizador de 2.5 min solo se reinicia después
-// de una operación de agenda guardada correctamente.
+// V6.5: la actividad del usuario solo mantiene la presencia en Realtime Database.
+// No genera lecturas ni escrituras de Firestore. Si pasan 2 min 30 s sin actividad,
+// se pausa la sincronización puntual hasta que el usuario vuelva a interactuar.
+let lastActivityPulse = 0;
+function noteLocalActivity() {
+  const now = Date.now();
+  if (now - lastActivityPulse < 10000) return;
+  lastActivityPulse = now;
+  collaboration.noteActivity();
+}
+
+document.addEventListener('pointerdown', noteLocalActivity, { capture: true, passive: true });
+document.addEventListener('pointermove', noteLocalActivity, { capture: true, passive: true });
+document.addEventListener('keydown', noteLocalActivity, { capture: true });
 
 $('#new').onclick = () => {
   if (!isOnline) {
@@ -2780,11 +2722,13 @@ $('#quick-filters').onclick = event => {
 
   quickView = button.dataset.view;
 
-  if (quickView === 'today' ||
-      quickView === 'week') {
-    week = monday(new Date());
+  if (quickView === 'today' || quickView === 'week') {
+    const targetWeek = monday(new Date());
+    const sameWeek = dateKey(targetWeek) === dateKey(week);
+    week = targetWeek;
     selectedDay = 0;
-    refreshVisibleRange();
+    if (sameWeek) render();
+    else refreshVisibleRange();
   } else {
     render();
   }
@@ -3012,7 +2956,14 @@ window.addEventListener('pointerup', async event => {
       state.settings
     );
     upsertBookingLocal(result.booking);
-    void signalSuccessfulAgendaMutation();
+    signalSuccessfulAgendaMutation({
+      entity: 'booking',
+      id: result.booking.id,
+      date: result.booking.date,
+      previousDate: result.before?.date || '',
+      action: 'move',
+      roomId: result.booking.roomId
+    });
     render();
 
     notice(
@@ -3245,10 +3196,13 @@ $('#next').onclick = () => {
 };
 
 $('#current-week').onclick = () => {
-  week = monday(new Date());
+  const targetWeek = monday(new Date());
+  const sameWeek = dateKey(targetWeek) === dateKey(week);
+  week = targetWeek;
   quickView = 'week';
   selectedDay = 0;
-  refreshVisibleRange();
+  if (sameWeek) render();
+  else refreshVisibleRange();
 };
 
 
@@ -3318,7 +3272,16 @@ $('#booking-form').onsubmit = async event => {
         currentUser?.email,
         state.settings
       );
-      for (const booking of result.bookings) upsertBookingLocal(booking);
+      for (const booking of result.bookings) {
+        upsertBookingLocal(booking);
+        signalSuccessfulAgendaMutation({
+          entity: 'booking',
+          id: booking.id,
+          date: booking.date,
+          action: 'create',
+          roomId: booking.roomId
+        });
+      }
     } else {
       const result = await repository.saveBooking(
         base,
@@ -3326,9 +3289,15 @@ $('#booking-form').onsubmit = async event => {
         state.settings
       );
       upsertBookingLocal(result.booking);
+      signalSuccessfulAgendaMutation({
+        entity: 'booking',
+        id: result.booking.id,
+        date: result.booking.date,
+        previousDate: result.before?.date || '',
+        action: result.before ? 'update' : 'create',
+        roomId: result.booking.roomId
+      });
     }
-
-    void signalSuccessfulAgendaMutation();
 
     const rangeBeforeSave = visibleRange();
 
@@ -3416,7 +3385,13 @@ $('#cancel-booking').onclick = () => {
         currentUser?.email
       );
       upsertBookingLocal(result.booking);
-      void signalSuccessfulAgendaMutation();
+      signalSuccessfulAgendaMutation({
+        entity: 'booking',
+        id: result.booking.id,
+        date: result.booking.date,
+        action: 'cancel',
+        roomId: result.booking.roomId
+      });
       render();
 
       $('#detail-dialog').close();
@@ -3439,8 +3414,16 @@ $('#cancel-series').onclick = () => {
         currentBooking.seriesId,
         currentUser?.email
       );
-      for (const booking of result.bookings || []) upsertBookingLocal(booking);
-      void signalSuccessfulAgendaMutation();
+      for (const booking of result.bookings || []) {
+        upsertBookingLocal(booking);
+        signalSuccessfulAgendaMutation({
+          entity: 'booking',
+          id: booking.id,
+          date: booking.date,
+          action: 'cancel',
+          roomId: booking.roomId
+        });
+      }
       render();
 
       $('#detail-dialog').close();
@@ -3464,7 +3447,13 @@ $('#restore-booking').onclick = () => {
         currentUser?.email
       );
       upsertBookingLocal(result.booking);
-      void signalSuccessfulAgendaMutation();
+      signalSuccessfulAgendaMutation({
+        entity: 'booking',
+        id: result.booking.id,
+        date: result.booking.date,
+        action: 'restore',
+        roomId: result.booking.roomId
+      });
       render();
 
       $('#detail-dialog').close();
@@ -3615,7 +3604,13 @@ $('#admin-res-list').onclick = async event => {
           currentUser?.email
         );
         upsertBookingLocal(result.booking);
-        void signalSuccessfulAgendaMutation();
+        signalSuccessfulAgendaMutation({
+          entity: 'booking',
+          id: result.booking.id,
+          date: result.booking.date,
+          action: 'cancel',
+          roomId: result.booking.roomId
+        });
         render();
 
         notice('Reservación cancelada.');
@@ -3638,7 +3633,13 @@ $('#admin-res-list').onclick = async event => {
           currentUser?.email
         );
         upsertBookingLocal(result.booking);
-        void signalSuccessfulAgendaMutation();
+        signalSuccessfulAgendaMutation({
+          entity: 'booking',
+          id: result.booking.id,
+          date: result.booking.date,
+          action: 'restore',
+          roomId: result.booking.roomId
+        });
         render();
 
         notice('Reservación restaurada.');
@@ -3667,7 +3668,7 @@ $('#room-form').onsubmit = async event => {
 
     const data = new FormData(form);
 
-    await repository.saveRoom(
+    const savedRoom = await repository.saveRoom(
       String(data.get('id') || ''),
       {
         name: data.get('name'),
@@ -3682,10 +3683,11 @@ $('#room-form').onsubmit = async event => {
       currentUser?.email
     );
 
+    upsertRoomLocal(savedRoom);
     resetRoomForm();
     notice('Sala guardada.');
-    await refreshStaticState();
-    await loadAdminRooms();
+    renderAdminRoomLists();
+    render();
   } catch (error) {
     $('#room-error').textContent =
       error.message;
@@ -3752,15 +3754,16 @@ $('#panel-rooms').onclick = event => {
       async () => {
         ensureOnline();
 
-        await repository.setRoomActive(
+        const savedRoom = await repository.setRoomActive(
           id,
           false,
           currentUser?.email
         );
 
+        upsertRoomLocal(savedRoom);
         notice('Sala desactivada.');
-        await refreshStaticState();
-        await loadAdminRooms();
+        renderAdminRoomLists();
+        render();
       },
       'Desactivar'
     );
@@ -3777,15 +3780,16 @@ $('#panel-rooms').onclick = event => {
       async () => {
         ensureOnline();
 
-        await repository.setRoomActive(
+        const savedRoom = await repository.setRoomActive(
           id,
           true,
           currentUser?.email
         );
 
+        upsertRoomLocal(savedRoom);
         notice('Sala reactivada.');
-        await refreshStaticState();
-        await loadAdminRooms();
+        renderAdminRoomLists();
+        render();
       },
       'Reactivar'
     );
@@ -3807,11 +3811,19 @@ $('#panel-rooms').onclick = event => {
           currentUser?.email
         );
         state.blocks = state.blocks.filter(item => item.id !== id);
-        void signalSuccessfulAgendaMutation();
+        if (removed) {
+          signalSuccessfulAgendaMutation({
+            entity: 'roomBlock',
+            id: removed.id,
+            date: removed.date,
+            action: 'remove',
+            roomId: removed.roomId
+          });
+        }
         render();
 
         notice('Bloqueo eliminado.');
-        await loadAdminRooms();
+        await loadAdminRoomBlocks();
       },
       'Quitar bloqueo'
     );
@@ -3847,14 +3859,23 @@ $('#general-block-form').onsubmit = async event => {
         currentUser?.email
       );
       upsertBlockLocal(saved);
+      signalSuccessfulAgendaMutation({
+        entity: 'roomBlock', id: saved.id, date: saved.date,
+        action: 'create', roomId: saved.roomId
+      });
     } else {
       const saved = await repository.saveRoomBlocks(
         blocks,
         currentUser?.email
       );
-      for (const block of saved) upsertBlockLocal(block);
+      for (const block of saved) {
+        upsertBlockLocal(block);
+        signalSuccessfulAgendaMutation({
+          entity: 'roomBlock', id: block.id, date: block.date,
+          action: 'create', roomId: block.roomId
+        });
+      }
     }
-    void signalSuccessfulAgendaMutation();
     render();
 
     $('#general-block-dialog').close();
@@ -3905,14 +3926,23 @@ $('#block-form').onsubmit = async event => {
         currentUser?.email
       );
       upsertBlockLocal(saved);
+      signalSuccessfulAgendaMutation({
+        entity: 'roomBlock', id: saved.id, date: saved.date,
+        action: 'create', roomId: saved.roomId
+      });
     } else {
       const saved = await repository.saveRoomBlocks(
         blocks,
         currentUser?.email
       );
-      for (const block of saved) upsertBlockLocal(block);
+      for (const block of saved) {
+        upsertBlockLocal(block);
+        signalSuccessfulAgendaMutation({
+          entity: 'roomBlock', id: block.id, date: block.date,
+          action: 'create', roomId: block.roomId
+        });
+      }
     }
-    void signalSuccessfulAgendaMutation();
     render();
 
     form.reset();
@@ -3924,7 +3954,7 @@ $('#block-form').onsubmit = async event => {
         : `${blocks.length} días bloqueados.`
     );
 
-    await loadAdminRooms();
+    await loadAdminRoomBlocks();
   } catch (error) {
     $('#block-error').textContent = error.message;
   } finally {
@@ -4080,8 +4110,8 @@ $('#settings-form').onsubmit = async event => {
   try {
     ensureOnline();
 
+    const previousRange = visibleRange();
     const data = new FormData(form);
-
 
     const saved =
       await repository.saveSettings(
@@ -4097,12 +4127,16 @@ $('#settings-form').onsubmit = async event => {
         currentUser?.email
       );
 
-    state.settings =
-      normalizeSettings(saved);
+    state.settings = normalizeSettings(saved);
 
+    const nextRange = visibleRange();
     notice('Configuración actualizada.');
-    render();
-    refreshVisibleRange();
+
+    if (previousRange.from !== nextRange.from || previousRange.to !== nextRange.to) {
+      await refreshVisibleRange();
+    } else {
+      render();
+    }
   } catch (error) {
     $('#settings-error').textContent =
       error.message;
@@ -4180,18 +4214,12 @@ $('#sign-in').onclick = async () => {
 };
 
 async function signOutGracefully() {
-  await deactivatePresence(true);
+  await collaboration.stop();
   await authService.signOut();
 }
 
 $('#sign-out').onclick = signOutGracefully;
 $('#auth-sign-out').onclick = signOutGracefully;
-
-window.addEventListener('pagehide', () => {
-  if (localPresenceActive && currentUser?.email && navigator.onLine) {
-    repository.setPresence(currentUser.email, false).catch(() => {});
-  }
-});
 
 setInterval(() => {
   if (currentUser &&
@@ -4205,7 +4233,10 @@ $('#new').disabled = true;
 showAuth('Comprobando sesión…');
 
 authService.onChange(async user => {
-  stopCollaborationLocal();
+  await collaboration.stop();
+  localPresenceActive = false;
+  activePeerCount = 0;
+  collaborationAvailable = true;
   currentUser = null;
   clearCurrentGestures();
 
@@ -4239,6 +4270,7 @@ authService.onChange(async user => {
     showApp(user);
     setOnlineState(navigator.onLine);
     await startRealtime();
+    await startCollaboration(user);
   } catch (error) {
     showAuth(
       error.message ||

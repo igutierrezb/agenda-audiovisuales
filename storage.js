@@ -4,26 +4,23 @@ import {
   minutes,
   normalizeSettings,
   validateBooking
-} from './core.js?v=6.0';
+} from './core.js?v=6.5.1';
 
 import {
   db,
   OWNER_EMAIL,
   INITIAL_AUTHORIZED_USERS
-} from './firebase.js?v=4.1';
+} from './firebase.js?v=6.5.1';
 
 import {
   collection,
-  Timestamp,
   deleteField,
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
   writeBatch
@@ -36,7 +33,6 @@ const locksCollection = collection(db, 'locks');
 const hourLocksCollection = collection(db, 'hourLocks');
 const auditCollection = collection(db, 'auditLogs');
 const blocksCollection = collection(db, 'roomBlocks');
-const presenceCollection = collection(db, 'presence');
 
 const settingsRef = doc(db, 'settings', 'main');
 const installationRef = doc(db, 'system', 'installation');
@@ -413,61 +409,17 @@ export const repository = {
     };
   },
 
-  async setPresence(actorEmail, active) {
-    const actor = cleanEmail(actorEmail);
-    if (!actor) throw new Error('No se pudo identificar al usuario.');
 
-    await setDoc(doc(db, 'presence', actor), {
-      email: actor,
-      active: active === true,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+  async getBooking(id) {
+    const snapshot = await getDoc(doc(db, 'bookings', cleanText(id)));
+    if (!snapshot.exists()) return null;
+    return normalizeBooking({ id: snapshot.id, ...snapshot.data() });
   },
 
-  subscribePresence(callback, onError) {
-    const activeQuery = query(
-      presenceCollection,
-      where('active', '==', true)
-    );
-
-    return onSnapshot(activeQuery, snapshot => {
-      callback(snapshot.docs.map(docData));
-    }, onError);
-  },
-
-  subscribeAgendaChanges(sinceMs, callback, onError) {
-    const since = Timestamp.fromMillis(Math.max(0, Number(sinceMs) || Date.now()));
-
-    const bookingsQuery = query(
-      bookingsCollection,
-      where('updatedAt', '>=', since)
-    );
-
-    const blocksQuery = query(
-      blocksCollection,
-      where('updatedAt', '>=', since)
-    );
-
-    const unsubs = [
-      onSnapshot(bookingsQuery, snapshot => {
-        const bookings = snapshot.docChanges()
-          .filter(change => change.type !== 'removed')
-          .map(change => normalizeBooking({
-            id: change.doc.id,
-            ...change.doc.data()
-          }));
-        if (bookings.length) callback({ bookings, blocks: [] });
-      }, onError),
-
-      onSnapshot(blocksQuery, snapshot => {
-        const blocks = snapshot.docChanges()
-          .filter(change => change.type !== 'removed')
-          .map(change => ({ id: change.doc.id, ...change.doc.data() }));
-        if (blocks.length) callback({ bookings: [], blocks });
-      }, onError)
-    ];
-
-    return () => unsubs.forEach(unsub => unsub?.());
+  async getRoomBlock(id) {
+    const snapshot = await getDoc(doc(db, 'roomBlocks', cleanText(id)));
+    if (!snapshot.exists()) return null;
+    return { id: snapshot.id, ...snapshot.data() };
   },
 
   async queryBookingsRange(from, to) {
@@ -936,7 +888,12 @@ export const repository = {
     ));
     await batch.commit();
 
-    return roomRef.id;
+    return normalizeRoom({
+      id: roomRef.id,
+      ...previous,
+      ...payload,
+      active: previous?.active !== false
+    });
   },
 
   async setRoomActive(roomId, active, actorEmail) {
@@ -979,6 +936,12 @@ export const repository = {
     ));
 
     await batch.commit();
+
+    return normalizeRoom({
+      ...previous,
+      active,
+      updatedByEmail: actor
+    });
   },
 
   async listRooms() {
